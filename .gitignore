@@ -27,3 +27,6 @@ Thumbs.db
 .env
 .env.*
 .superpowers/
+
+# console build output
+ui/dist/
