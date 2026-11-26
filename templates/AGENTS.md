@@ -4,7 +4,7 @@ These rules apply to Claude Code, Codex CLI, Gemini CLI and local Ollama models 
 
 ## Scope
 - Work only inside the task folder `.orch/tasks/<id>/` and, for code tasks, the worktree orch gives you.
-- Never read `.env` files, SSH keys, or anything listed in `.gitignore`.
+- Never read secrets: `.env` files, SSH keys, credential or token files. The task folder is always yours to read and write.
 - Do not start other agents or long-running processes.
 
 ## Finishing a task

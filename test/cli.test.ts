@@ -39,3 +39,9 @@ test('worker prompt template carries the report contract placeholders', () => {
   const t = readFileSync(join(import.meta.dirname, '..', 'templates', 'worker-prompt.md'), 'utf8');
   for (const s of ['{{taskDir}}', '{{id}}', '"verified"', '"questions"']) assert.ok(t.includes(s), s);
 });
+
+test('AGENTS.md template forbids secrets but not the task folder', () => {
+  const t = readFileSync(join(import.meta.dirname, '..', 'templates', 'AGENTS.md'), 'utf8');
+  assert.doesNotMatch(t, /listed in `\.gitignore`/);
+  assert.match(t, /\.env/);
+});
