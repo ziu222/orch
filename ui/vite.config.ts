@@ -9,6 +9,7 @@ export default defineConfig({
     react(),
     {
       name: 'orch-token',
+      apply: 'serve', // dev only: a built page must never carry a token
       async transformIndexHtml(html) {
         try {
           const m = /name="orch-token" content="([a-f0-9]+)"/.exec(await (await fetch(ORCH + '/')).text());

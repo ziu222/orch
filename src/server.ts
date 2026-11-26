@@ -102,7 +102,9 @@ export async function startServer(root: string, opts: ServerOptions = {}): Promi
     if (extname(rel)) { send(res, 404, 'not found', 'text/plain'); return; }
     send(res, 200, injectToken(readFileSync(join(staticDir, 'index.html'), 'utf8')), TYPES['.html']); // single-page app routes
   };
-  const injectToken = (html: string) => html.replace('</head>', `<meta name="orch-token" content="${token}"></head>`);
+  // drop any token already in the file (a build made while another orch ui ran can bake one in), then add ours
+  const injectToken = (html: string) =>
+    html.replace(/<meta name="orch-token"[^>]*>/g, '').replace('</head>', `<meta name="orch-token" content="${token}"></head>`);
 
   const api = async (req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> => {
     const given = String(req.headers['x-orch-token'] ?? '');

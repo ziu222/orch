@@ -141,3 +141,16 @@ test('GET /api/diff validates its input', async () => {
   const { s } = await boot();
   assert.equal((await call(s, 'GET', '/api/diff?task=T-099&path=a.ts')).status, 400);
 });
+
+test('a token baked into index.html by an earlier build is replaced, not trusted', async () => {
+  const root = tmpRoot();
+  const staticDir = join(root, 'dist');
+  mkdirSync(staticDir);
+  writeFileSync(join(staticDir, 'index.html'), '<!doctype html><html><head><meta name="orch-token" content="stale0123"></head><body></body></html>');
+  const s = await startServer(root, { port: 0, staticDir, cliPath: FAKE });
+  open.push(s);
+  const html = await (await fetch(s.url + '/')).text();
+  assert.equal((html.match(/name="orch-token"/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /stale0123/);
+  assert.match(html, new RegExp(s.token));
+});

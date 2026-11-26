@@ -30,3 +30,4 @@ Thumbs.db
 
 # console build output
 ui/dist/
+ui/dist-artifact/
