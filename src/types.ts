@@ -47,3 +47,27 @@ export interface Config {
   maxReviewRounds: number;
   taskTimeoutSec: number;
 }
+
+export interface AdapterResult {
+  text: string;
+  tokensIn: number;
+  tokensOut: number;
+  estimated?: boolean;
+  rateLimited: boolean;
+  resetAt?: string;
+  error?: string;
+}
+
+export interface SpawnAdapter {
+  kind: 'spawn';
+  bin: string;
+  args(promptFile: string, model?: string): string[];
+  parse(stdout: string, stderr: string, code: number): AdapterResult;
+}
+
+export interface HttpAdapter {
+  kind: 'http';
+  call(prompt: string, model: string, signal: AbortSignal): Promise<AdapterResult>;
+}
+
+export type Adapter = SpawnAdapter | HttpAdapter;
