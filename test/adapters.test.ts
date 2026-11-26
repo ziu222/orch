@@ -85,7 +85,8 @@ test('resetAt is only taken from rate-limited results and must be a sane date', 
 });
 
 const codex = getAdapter('codex') as SpawnAdapter;
-const gemini = getAdapter('gemini') as SpawnAdapter;
+const agy = getAdapter('agy') as SpawnAdapter;
+const copilot = getAdapter('copilot') as SpawnAdapter;
 
 test('codex parse takes the last agent message and turn usage', () => {
   const r = codex.parse(fx('codex-ok.jsonl'), '', 0);
@@ -125,41 +126,93 @@ test('codex args: exec --json, no prompt text, optional model', () => {
   assert.ok(a.includes('--skip-git-repo-check'));
 });
 
-test('gemini parse reads response and sums tokens across models', () => {
-  const r = gemini.parse(fx('gemini-ok.json'), '', 0);
+test('agy parse reads response and tokens from the real fixture', () => {
+  const r = agy.parse(fx('agy-ok.json'), '', 0);
+  assert.match(r.text, /ok/i);
+  assert.equal(r.tokensIn, 13284);
+  assert.equal(r.tokensOut, 22);
+  assert.equal(r.rateLimited, false);
+  assert.equal(r.error, undefined);
+});
+
+test('agy parse turns a 429 / RATE_LIMITED result into a rate limit with resetAt', () => {
+  const before = Date.now();
+  const r = agy.parse(fx('agy-error.json'), '', 1);
+  assert.equal(r.rateLimited, true);
+  assert.match(r.error!, /Quota exceeded/);
+  const t = Date.parse(r.resetAt!);
+  assert.ok(t >= before + 90 * 60_000 - 1000 && t <= Date.now() + 90 * 60_000 + 1000);
+});
+
+test('agy parse never throws on odd output; stderr only matters on failure', () => {
+  for (const out of ['null', '[]', 'oops']) assert.ok(agy.parse(out, '', 1).error, out);
+  assert.equal(agy.parse(fx('agy-ok.json'), 'quota warning', 0).rateLimited, false);
+});
+
+test('agy args: -p with the instruction, json output, accept-edits, optional model', () => {
+  const a = agy.args('p.md', 'gemini-3-pro');
+  assert.equal(agy.bin, 'agy');
+  assert.deepEqual(a.slice(0, 2), ['-p', 'Read p.md and follow it.']);
+  assert.ok(a.join(' ').includes('--output-format json'));
+  assert.ok(a.join(' ').includes('--mode accept-edits'));
+  assert.ok(a.join(' ').includes('--model gemini-3-pro'));
+});
+
+test('agy non-SUCCESS status or empty error object is still an error', () => {
+  assert.ok(agy.parse('{"status":"FAILED","response":""}', '', 0).error);
+  assert.ok(agy.parse('{"error":{"message":"","code":500}}', '', 1).error);
+  assert.ok(agy.parse('{"error":{"code":500}}', '', 0).error);
+});
+
+test('copilot parse reads assistant.message from the real fixture and marks estimated when tokens absent', () => {
+  const r = copilot.parse(fx('copilot-ok.jsonl'), '', 0);
   assert.equal(r.text, 'ok');
-  assert.equal(r.tokensIn, 8231);
-  assert.equal(r.tokensOut, 2 + 57); // candidates + thoughts
+  assert.equal(r.tokensIn, 0);
+  assert.equal(r.tokensOut, 0);
+  assert.equal(r.estimated, true);
+  assert.equal(r.rateLimited, false);
+  assert.equal(r.error, undefined);
+});
+
+test('copilot parse flags rate limits and extracts retryAfter from error events', () => {
+  const before = Date.now();
+  const r = copilot.parse(fx('copilot-error.jsonl'), '', 1);
+  assert.equal(r.rateLimited, true);
+  assert.match(r.error!, /429/);
+  const t = Date.parse(r.resetAt!);
+  assert.ok(t >= before + 45 * 60_000 - 1000 && t <= Date.now() + 45 * 60_000 + 1000);
+});
+
+test('copilot parse ignores transient error notices before a completed exitCode 0 result', () => {
+  const out = [
+    '{"type":"session.error","data":{"message":"Reconnecting after 429..."}}',
+    '{"type":"assistant.message","data":{"content":"ok"}}',
+    '{"type":"result","exitCode":0,"usage":{"inputTokens":120,"outputTokens":15}}',
+  ].join('\n');
+  const r = copilot.parse(out, 'quota warning', 0);
+  assert.equal(r.error, undefined);
+  assert.equal(r.rateLimited, false);
+  assert.equal(r.text, 'ok');
+  assert.equal(r.tokensIn, 120);
+  assert.equal(r.tokensOut, 15);
+  assert.equal(r.estimated, undefined);
+});
+
+test('copilot parse never throws on garbage and reports missing result', () => {
+  const r = copilot.parse('not json\n{broken', '', 1);
+  assert.ok(r.error);
   assert.equal(r.rateLimited, false);
 });
 
-test('gemini parse turns a 429 error object into a rate limit', () => {
-  const r = gemini.parse(fx('gemini-error.json'), '', 1);
-  assert.equal(r.rateLimited, true);
-  assert.match(r.error!, /Quota exceeded/);
-});
-
-test('gemini parse never throws on odd output; stderr only matters on failure', () => {
-  for (const out of ['null', '[]', 'oops']) assert.ok(gemini.parse(out, '', 1).error, out);
-  assert.equal(gemini.parse(fx('gemini-ok.json'), 'quota warning', 0).rateLimited, false);
-});
-
-test('gemini args: -p with the instruction, json output, optional model', () => {
-  const a = gemini.args('p.md', 'gemini-2.5-pro');
-  assert.equal(gemini.bin, 'gemini');
+test('copilot args: -p with instruction, json output, non-interactive flags, optional model', () => {
+  const a = copilot.args('p.md', 'gpt-5.6-sol');
+  assert.equal(copilot.bin, 'copilot');
   assert.deepEqual(a.slice(0, 2), ['-p', 'Read p.md and follow it.']);
   assert.ok(a.join(' ').includes('--output-format json'));
-  assert.ok(a.join(' ').includes('-m gemini-2.5-pro'));
-});
-
-test('gemini parse survives null model entries', () => {
-  assert.doesNotThrow(() => gemini.parse('{"response":"ok","stats":{"models":{"m":null}}}', '', 0));
-});
-
-test('gemini error object with an empty message is still an error', () => {
-  const r = gemini.parse('{"error":{"message":"","code":500}}', '', 1);
-  assert.ok(r.error);
-  assert.ok(gemini.parse('{"error":{"code":500}}', '', 0).error);
+  assert.ok(a.includes('--allow-all-tools'));
+  assert.ok(a.includes('--trust-folder'));
+  assert.ok(a.includes('--no-ask-user'));
+  assert.ok(a.join(' ').includes('--model gpt-5.6-sol'));
 });
 
 test('codex retry notice before a completed turn is neither an error nor a rate limit', () => {

@@ -1,4 +1,4 @@
-export type Vendor = 'claude' | 'codex' | 'gemini' | 'ollama';
+export type Vendor = 'claude' | 'codex' | 'agy' | 'copilot' | 'ollama';
 export type TaskStatus = 'queued' | 'running' | 'review' | 'done' | 'failed' | 'blocked' | 'cancelled';
 export type Role = 'plan' | 'scout' | 'implement' | 'review' | 'verify' | 'summarize';
 

@@ -1,6 +1,6 @@
 # AGENTS.md — shared rules for every agent orch runs
 
-These rules apply to Claude Code, Codex CLI, Gemini CLI and local Ollama models alike.
+These rules apply to Claude Code, Codex CLI, Antigravity CLI, GitHub Copilot CLI and local Ollama models alike.
 
 ## Scope
 - Work only inside the task folder `.orch/tasks/<id>/` and, for code tasks, the worktree orch gives you.
