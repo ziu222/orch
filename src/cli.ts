@@ -9,7 +9,7 @@ import {
   answerQuestion, appendContext, createTask, listTasks, nextTaskId, readQuestions, readRuns, setStatus,
 } from './store.ts';
 import type { Vendor } from './types.ts';
-import { mergeWorktree } from './worktree.ts';
+import { excludeOrch, mergeWorktree } from './worktree.ts';
 
 const TEMPLATES = join(import.meta.dirname, '..', 'templates');
 const VENDORS: Vendor[] = ['claude', 'codex', 'agy', 'copilot', 'ollama'];
@@ -28,6 +28,7 @@ commands:
 
 export function initRepo(root: string): void {
   saveConfig(root, loadConfig(root));
+  if (existsSync(join(root, '.git'))) excludeOrch(root);
   const agents = join(root, 'AGENTS.md');
   if (!existsSync(agents)) copyFileSync(join(TEMPLATES, 'AGENTS.md'), agents);
   console.log('orch initialised: .orch/config.json, AGENTS.md');

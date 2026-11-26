@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { isAbsolute, join, resolve } from 'node:path';
 import { listTasks, readTask } from './store.ts';
 
 export const worktreePath = (repo: string, taskId: string) => join(repo, '.orch', 'worktrees', taskId);
@@ -19,9 +19,20 @@ function branchExists(repo: string, branch: string): boolean {
   }
 }
 
+// orch state and worktrees live in .orch/; keep them out of the user's git status without touching their .gitignore
+export function excludeOrch(repo: string): void {
+  const common = git(repo, 'rev-parse', '--git-common-dir');
+  const file = join(isAbsolute(common) ? common : resolve(repo, common), 'info', 'exclude');
+  const cur = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  if (cur.split(/\r?\n/).some(l => l.trim() === '.orch/' || l.trim() === '.orch' || l.trim() === '/.orch/')) return;
+  mkdirSync(join(file, '..'), { recursive: true });
+  appendFileSync(file, `${cur && !cur.endsWith('\n') ? '\n' : ''}.orch/\n`);
+}
+
 export function ensureWorktree(repo: string, taskId: string): string {
   const dir = worktreePath(repo, taskId);
   if (existsSync(dir)) return dir;
+  excludeOrch(repo);
   mkdirSync(join(repo, '.orch', 'worktrees'), { recursive: true });
   const branch = branchName(taskId);
   if (branchExists(repo, branch)) git(repo, 'worktree', 'add', dir, branch);
@@ -55,8 +66,20 @@ export function mergeWorktree(repo: string, taskId: string): { merged: boolean; 
     git(repo, 'merge', '--no-edit', branch);
     return { merged: true, message: `merged ${branch}` };
   } catch (e) {
-    return { merged: false, message: `git merge ${branch} failed: ${(e as Error).message}` };
+    // never leave the user's checkout half-merged
+    try { git(repo, 'merge', '--abort'); } catch { /* no merge in progress */ }
+    return { merged: false, message: `could not merge ${branch} (conflict or local changes); merge aborted: ${(e as Error).message.split(/\r?\n/).slice(0, 3).join(' ')}` };
   }
+}
+
+// the worker never commits: orch does, so merge has something to merge. Returns false when nothing changed.
+export function commitWorktree(dir: string, message: string): boolean {
+  git(dir, 'add', '-A');
+  if (git(dir, 'status', '--porcelain') === '') return false;
+  let identity: string[] = [];
+  try { git(dir, 'config', 'user.email'); } catch { identity = ['-c', 'user.name=orch', '-c', 'user.email=orch@localhost']; }
+  git(dir, ...identity, 'commit', '-m', message);
+  return true;
 }
 
 export function removeWorktree(repo: string, taskId: string): void {

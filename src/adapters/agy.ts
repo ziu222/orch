@@ -1,4 +1,5 @@
 // Tested against Antigravity CLI 1.5.18 (`agy -p … --output-format json`).
+import { dirname } from 'node:path';
 import type { AdapterResult, SpawnAdapter } from '../types.ts';
 import { instruction, isRateLimit, retryAfter, snippet } from './util.ts';
 
@@ -26,6 +27,7 @@ export const agy: SpawnAdapter = {
     '--output-format', 'json',
     '--mode', 'accept-edits',
     '--disable-slash-commands',
+    '--add-dir', dirname(promptFile),
     ...(model ? ['--model', model] : []),
   ],
   parse(stdout, stderr, code): AdapterResult {

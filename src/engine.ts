@@ -5,7 +5,7 @@ import { runTask, type RunOutcome } from './runner.ts';
 import {
   appendContext, appendQuestion, appendRun, createTask, listTasks, nextTaskId, readReport, readTask, setStatus,
 } from './store.ts';
-import { ensureWorktree } from './worktree.ts';
+import { commitWorktree, ensureWorktree } from './worktree.ts';
 import type { Config, Task, Vendor } from './types.ts';
 
 const DEFAULT_PAUSE_MS = 5 * 3600_000;
@@ -132,7 +132,17 @@ export async function runEngine(
         },
         `Re-review ${impl.id} after fixes in ${fixId}.`,
       );
+      // anything that waited on this review (verify, merge gates…) must wait for the re-review instead
+      for (const x of listTasks(root)) {
+        if (x.id === fixId || x.id === reviewId || !x.deps.includes(t.id)) continue;
+        if (x.status !== 'queued' && x.status !== 'blocked') continue;
+        setStatus(root, x.id, x.status, { deps: x.deps.map(d => (d === t.id ? reviewId : d)) });
+      }
       return;
+    }
+    if (o.status === 'done' && t.writesCode && t.worktree) {
+      const kind = t.title.startsWith('Fix') ? 'fix' : 'feat';
+      commitWorktree(t.worktree, `${kind}(${t.id}): ${t.title}`.slice(0, 100));
     }
     const status = o.status === 'done' ? 'done' : o.status; // failed | blocked | cancelled
     setStatus(root, t.id, status, { reason: o.reason });
@@ -153,14 +163,23 @@ export async function runEngine(
       }
     }
 
+    let failedSync = false;
     if (!signal.aborted) {
       for (const t of tasks) {
         if (t.status !== 'queued' || running.has(t.id)) continue;
         if (!t.deps.every(d => status.get(d) === 'done')) continue;
         const v = pickVendor(t);
         if (!v || live(v) >= cfg.vendors[v].maxParallel) continue;
+        let worktree = t.worktree;
+        if (!worktree && t.writesCode && existsSync(join(root, '.git'))) {
+          try { worktree = ensureWorktree(root, t.id); }
+          catch (e) {
+            setStatus(root, t.id, 'failed', { reason: `could not create worktree: ${(e as Error).message.split(/\r?\n/)[0]}` });
+            failedSync = true;
+            continue;
+          }
+        }
         handoff(t);
-        const worktree = t.worktree ?? (t.writesCode && existsSync(join(root, '.git')) ? ensureWorktree(root, t.id) : undefined);
         const started = setStatus(root, t.id, 'running', { vendor: v, ...(worktree ? { worktree } : {}) });
         runningVendor.set(t.id, v);
         running.set(t.id, (async () => {
@@ -173,7 +192,10 @@ export async function runEngine(
       }
     }
 
-    if (running.size === 0) break;
+    if (running.size === 0) {
+      if (failedSync) continue; // a task failed before it started: re-run the pass so its dependants get blocked
+      break;
+    }
     await Promise.race(running.values());
   }
 

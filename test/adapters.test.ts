@@ -227,3 +227,15 @@ test('codex retry notice before a completed turn is neither an error nor a rate 
   assert.equal(r.rateLimited, false);
   assert.equal(r.text, 'ok');
 });
+
+test('every cli adapter opens the task folder so a worktree run can read the prompt and write report.json', () => {
+  const promptFile = join('repo', '.orch', 'tasks', 'T-001', 'prompt.md');
+  for (const v of ['claude', 'codex', 'agy', 'copilot'] as const) {
+    const a = (getAdapter(v) as SpawnAdapter).args(promptFile);
+    const i = a.indexOf('--add-dir');
+    assert.ok(i >= 0, `${v} has no --add-dir`);
+    assert.equal(a[i + 1], join('repo', '.orch', 'tasks', 'T-001'), v);
+    // claude's --add-dir is variadic: the next token must be a flag, never the instruction
+    assert.ok(a[i + 2] === undefined || a[i + 2].startsWith('-') || v !== 'claude', `${v}: --add-dir would swallow the next argument`);
+  }
+});

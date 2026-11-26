@@ -1,4 +1,5 @@
 // Tested against GitHub Copilot CLI 1.0.116 (`copilot -p … --output-format json`).
+import { dirname } from 'node:path';
 import type { AdapterResult, SpawnAdapter } from '../types.ts';
 import { instruction, isRateLimit, retryAfter, snippet } from './util.ts';
 
@@ -34,6 +35,7 @@ export const copilot: SpawnAdapter = {
     '--allow-all-tools',
     '--trust-folder',
     '--no-ask-user',
+    '--add-dir', dirname(promptFile),
     ...(model ? ['--model', model] : []),
   ],
   parse(stdout, stderr, code): AdapterResult {

@@ -61,3 +61,61 @@ test('mergeWorktree refuses until review is done, then merges cleanly', () => {
   assert.equal(ok.merged, true, ok.message);
   assert.equal(readFileSync(join(repo, 'health.ts'), 'utf8').trim(), 'export const ok = true;');
 });
+
+import { commitWorktree } from '../src/worktree.ts';
+
+// a user repo that does NOT ignore .orch/ itself
+function plainRepo(): string {
+  const repo = tmpRoot();
+  git(repo, 'init');
+  git(repo, 'config', 'user.email', 'test@example.com');
+  git(repo, 'config', 'user.name', 'Test User');
+  writeFileSync(join(repo, 'README.md'), 'hello\n');
+  git(repo, 'add', 'README.md');
+  git(repo, 'commit', '-m', 'init');
+  return repo;
+}
+
+test('commitWorktree commits what the worker left uncommitted, and reports when there is nothing', () => {
+  const repo = initGitRepo();
+  const wt = ensureWorktree(repo, 'T-001');
+  assert.equal(commitWorktree(wt, 'feat(T-001): add feature'), false);
+  writeFileSync(join(wt, 'feature.txt'), 'x\n');
+  assert.equal(commitWorktree(wt, 'feat(T-001): add feature'), true);
+  assert.equal(git(wt, 'status', '--porcelain'), '');
+  assert.equal(git(repo, 'log', '-1', '--format=%s', 'orch/t-001'), 'feat(T-001): add feature');
+});
+
+test('commitWorktree works even when git has no identity configured', () => {
+  const repo = initGitRepo();
+  const wt = ensureWorktree(repo, 'T-001');
+  writeFileSync(join(wt, 'f.txt'), 'x\n');
+  git(repo, 'config', '--unset', 'user.email'); git(repo, 'config', '--unset', 'user.name');
+  const keys = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM'] as const;
+  const prev = keys.map(k => process.env[k]);
+  keys.forEach(k => { process.env[k] = join(repo, 'none'); });
+  try { assert.equal(commitWorktree(wt, 'feat(T-001): x'), true); }
+  finally { keys.forEach((k, i) => { if (prev[i] === undefined) delete process.env[k]; else process.env[k] = prev[i]; }); }
+});
+
+test('ensureWorktree keeps .orch/ out of the main checkout even when the repo does not ignore it', () => {
+  const repo = plainRepo();
+  ensureWorktree(repo, 'T-001');
+  assert.equal(git(repo, 'status', '--porcelain'), '');
+});
+
+test('a conflicting merge is aborted so the repo is not left mid-merge', () => {
+  const repo = plainRepo();
+  createTask(repo, { id: 'T-001', title: 'impl', role: 'implement', vendor: 'codex', deps: [], writesCode: true }, 'impl');
+  const wt = ensureWorktree(repo, 'T-001');
+  writeFileSync(join(wt, 'README.md'), 'from branch\n');
+  commitWorktree(wt, 'feat(T-001): edit');
+  setStatus(repo, 'T-001', 'done', { worktree: wt });
+  writeFileSync(join(repo, 'README.md'), 'from main\n');
+  git(repo, 'commit', '-am', 'edit on main');
+  const r = mergeWorktree(repo, 'T-001');
+  assert.equal(r.merged, false);
+  assert.match(r.message, /conflict/i);
+  assert.equal(existsSync(join(repo, '.git', 'MERGE_HEAD')), false);
+  assert.equal(readFileSync(join(repo, 'README.md'), 'utf8').trim(), 'from main');
+});

@@ -204,3 +204,50 @@ test('same-vendor review is refused at task creation', () => {
     /cross-vendor review required/,
   );
 });
+
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+
+const gitIn = (cwd: string, ...a: string[]) => execFileSync('git', a, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+function repoWithCommit(): string {
+  const root = tmpRoot();
+  gitIn(root, 'init'); gitIn(root, 'config', 'user.email', 't@t'); gitIn(root, 'config', 'user.name', 't');
+  writeFileSync(join(root, 'README.md'), 'x\n'); gitIn(root, 'add', 'README.md'); gitIn(root, 'commit', '-m', 'init');
+  return root;
+}
+
+test('a worktree that cannot be created fails that task only', async () => {
+  const root = tmpRoot();
+  gitIn(root, 'init'); // no commit: `git worktree add … HEAD` cannot work
+  add(root, 'T-001', 'codex', [], 'implement', true); add(root, 'T-002', 'claude');
+  const r = await runEngine(root, { run: fakeRun().run });
+  assert.equal(readTask(root, 'T-001').status, 'failed');
+  assert.match(readTask(root, 'T-001').reason!, /worktree/);
+  assert.equal(readTask(root, 'T-002').status, 'done');
+  assert.equal(r.failed, 1);
+});
+
+test('a finished code task has its worktree changes committed by the engine', async () => {
+  const root = repoWithCommit();
+  add(root, 'T-001', 'codex', [], 'implement', true);
+  const run = async (_r: string, t: Task): Promise<RunOutcome> => {
+    writeFileSync(join(t.worktree!, 'feature.txt'), 'x\n'); // the worker never commits
+    writeFileSync(join(taskDir(root, t.id), 'report.json'), JSON.stringify(ok()));
+    return { status: 'done', report: ok(), result: res };
+  };
+  await runEngine(root, { run });
+  const wt = readTask(root, 'T-001').worktree!;
+  assert.equal(gitIn(wt, 'status', '--porcelain'), '');
+  assert.match(gitIn(root, 'log', '-1', '--format=%s', 'orch/t-001'), /T-001/);
+});
+
+test('dependants of a review that found problems wait for the re-review', async () => {
+  const root = tmpRoot();
+  add(root, 'T-001', 'codex', [], 'implement', true);
+  createTask(root, { id: 'T-002', title: 'review', role: 'review', vendor: 'claude', deps: ['T-001'], writesCode: false, reviewOf: 'T-001', round: 1 }, 'r');
+  add(root, 'T-003', 'codex', ['T-002'], 'verify');
+  const f = fakeRun(t => (t.id === 'T-002' ? { report: { ...ok(), findings: ['bug'] } } : {}));
+  await runEngine(root, { run: f.run });
+  assert.deepEqual(f.starts.map(s => s.id), ['T-001', 'T-002', 'T-004', 'T-005', 'T-003']);
+  assert.deepEqual(readTask(root, 'T-003').deps, ['T-005']);
+});
