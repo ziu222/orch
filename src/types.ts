@@ -14,6 +14,7 @@ export interface Task {
   round?: number;
   worktree?: string;
   reason?: string;
+  handedOff?: boolean;
 }
 
 export interface Report {
