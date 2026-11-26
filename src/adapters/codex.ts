@@ -1,5 +1,6 @@
 // Tested against codex-cli 0.154.0 (`codex exec --json`). The runner must close stdin:
 // codex exec otherwise waits on "Reading additional input from stdin...".
+import { dirname } from 'node:path';
 import type { AdapterResult, SpawnAdapter } from '../types.ts';
 import { instruction, isRateLimit, retryAfter, snippet } from './util.ts';
 
@@ -16,6 +17,7 @@ export const codex: SpawnAdapter = {
   bin: 'codex',
   args: (promptFile, model) => [
     'exec', '--json', '--full-auto', '--skip-git-repo-check',
+    '--add-dir', dirname(promptFile),
     ...(model ? ['-m', model] : []),
     instruction(promptFile),
   ],

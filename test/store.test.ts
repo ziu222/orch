@@ -9,7 +9,7 @@ import {
 } from '../src/store.ts';
 import { readFileSync } from 'node:fs';
 
-const scout = (id: string) => ({ id, title: 'Scout auth', role: 'scout' as const, vendor: 'gemini' as const, deps: [], writesCode: false });
+const scout = (id: string) => ({ id, title: 'Scout auth', role: 'scout' as const, vendor: 'agy' as const, deps: [], writesCode: false });
 
 test('createTask writes queued task and ids increment', () => {
   const root = tmpRoot();

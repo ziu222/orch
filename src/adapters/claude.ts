@@ -1,4 +1,5 @@
 // Tested against Claude Code 2.1.304 (`claude -p … --output-format json`).
+import { dirname } from 'node:path';
 import type { AdapterResult, SpawnAdapter } from '../types.ts';
 import { instruction, isRateLimit } from './util.ts';
 
@@ -26,6 +27,8 @@ export const claude: SpawnAdapter = {
   args: (promptFile, model) => [
     '-p', instruction(promptFile),
     '--output-format', 'json',
+    // the task folder sits outside a worktree; without this claude cannot read prompt.md or write report.json
+    '--add-dir', dirname(promptFile),
     '--permission-mode', 'acceptEdits',
     ...(model ? ['--model', model] : []),
   ],

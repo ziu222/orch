@@ -167,3 +167,12 @@ test('multi-byte text split across chunks survives intact', async () => {
   const o = await runTask(root, task, cfg, sig());
   assert.equal(o.result.text, 'ệ'.repeat(40000));
 });
+
+test('prompt.md embeds the repo AGENTS.md so worktree workers see the shared rules', async () => {
+  useFake('ok');
+  const { root, task, cfg } = setup();
+  writeFileSync(join(root, 'AGENTS.md'), '# Shared rules\n- never touch prod');
+  await runTask(root, task, cfg, sig());
+  const prompt = readFileSync(join(taskDir(root, 'T-001'), 'prompt.md'), 'utf8');
+  assert.match(prompt, /never touch prod/);
+});
