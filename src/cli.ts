@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { answerTask } from './actions.ts';
 import { loadConfig, saveConfig } from './config.ts';
 import { runEngine } from './engine.ts';
 import { planRequest } from './planner.ts';
@@ -9,6 +11,7 @@ import {
   answerQuestion, appendContext, createTask, listTasks, nextTaskId, readQuestions, readRuns, setStatus,
 } from './store.ts';
 import type { Vendor } from './types.ts';
+import { startServer } from './server.ts';
 import { excludeOrch, mergeWorktree } from './worktree.ts';
 
 const TEMPLATES = join(import.meta.dirname, '..', 'templates');
@@ -24,7 +27,8 @@ commands:
   status                       show tasks and open questions
   stats                        show per-vendor task and token totals
   answer <taskId> "<text>"     answer a worker's open question and requeue the task
-  merge <taskId>               merge a verified task's worktree branch into the current branch`;
+  merge <taskId>               merge a verified task's worktree branch into the current branch
+  ui [--port <n>] [--open]     serve the web console for this repo on 127.0.0.1 (default port 4173)`;
 
 export function initRepo(root: string): void {
   saveConfig(root, loadConfig(root));
@@ -34,11 +38,7 @@ export function initRepo(root: string): void {
   console.log('orch initialised: .orch/config.json, AGENTS.md');
 }
 
-export function answerTask(root: string, taskId: string, text: string): void {
-  answerQuestion(root, taskId, text);
-  appendContext(root, taskId, `Answer from user: ${text}`);
-  setStatus(root, taskId, 'queued', { reason: undefined });
-}
+export { answerTask };
 
 export function formatStatus(root: string): string {
   const tasks = listTasks(root);
@@ -116,6 +116,12 @@ async function runCmd(root: string, args: string[]): Promise<number> {
   }
 }
 
+function openBrowser(url: string): void {
+  const [bin, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+    : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+  try { spawn(bin as string, args as string[], { stdio: 'ignore', detached: true }).unref(); } catch { /* the url is printed anyway */ }
+}
+
 async function main(): Promise<void> {
   const root = process.cwd();
   const [cmd, ...rest] = process.argv.slice(2);
@@ -145,6 +151,19 @@ async function main(): Promise<void> {
     const r = mergeWorktree(root, taskId);
     console.log(r.message);
     if (!r.merged) process.exit(1);
+  } else if (cmd === 'ui') {
+    const pi = rest.indexOf('--port');
+    const port = pi >= 0 ? Number(rest[pi + 1]) : 4173;
+    if (!Number.isInteger(port) || port < 0 || port > 65535) {
+      console.error('usage: orch ui [--port <0-65535>] [--open]');
+      process.exit(1);
+    }
+    const srv = await startServer(root, { port });
+    console.log(srv.url);
+    if (rest.includes('--open')) openBrowser(srv.url);
+    const bye = () => { void srv.close().then(() => process.exit(0)); };
+    process.on('SIGINT', bye);
+    process.on('SIGTERM', bye);
   } else {
     console.error(USAGE);
     process.exit(1);

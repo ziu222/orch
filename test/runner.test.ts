@@ -1,6 +1,6 @@
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpRoot } from './helpers.ts';
 import { createTask, readRuns, taskDir } from '../src/store.ts';
@@ -175,4 +175,18 @@ test('prompt.md embeds the repo AGENTS.md so worktree workers see the shared rul
   await runTask(root, task, cfg, sig());
   const prompt = readFileSync(join(taskDir(root, 'T-001'), 'prompt.md'), 'utf8');
   assert.match(prompt, /never touch prod/);
+});
+
+test('skills switched on for the task vendor travel in the prompt; others do not', async () => {
+  useFake('ok');
+  const { root, task, cfg } = setup(); // vendor claude
+  mkdirSync(join(root, 'skills', 'code-review'), { recursive: true });
+  mkdirSync(join(root, 'skills', 'writing-plans'), { recursive: true });
+  writeFileSync(join(root, 'skills', 'code-review', 'SKILL.md'), '# Review skill\nCHECK THE DIFF');
+  writeFileSync(join(root, 'skills', 'writing-plans', 'SKILL.md'), '# Plans skill\nWRITE A PLAN');
+  writeFileSync(join(root, '.orch', 'skills.json'), JSON.stringify({ 'code-review': { claude: true }, 'writing-plans': { codex: true } }));
+  await runTask(root, task, cfg, sig());
+  const prompt = readFileSync(join(taskDir(root, 'T-001'), 'prompt.md'), 'utf8');
+  assert.match(prompt, /CHECK THE DIFF/);
+  assert.doesNotMatch(prompt, /WRITE A PLAN/);
 });
