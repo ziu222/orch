@@ -1,6 +1,11 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { loadConfig, saveConfig } from './config.ts';
 import { runTask, type RunOutcome } from './runner.ts';
-import { appendContext, appendRun, listTasks, readReport, readTask, setStatus } from './store.ts';
+import {
+  appendContext, appendQuestion, appendRun, createTask, listTasks, nextTaskId, readReport, readTask, setStatus,
+} from './store.ts';
+import { ensureWorktree } from './worktree.ts';
 import type { Config, Task, Vendor } from './types.ts';
 
 const DEFAULT_PAUSE_MS = 5 * 3600_000;
@@ -60,6 +65,14 @@ export async function runEngine(
     setStatus(root, t.id, t.status, { handedOff: true });
   };
 
+  const pickReviewer = (author: Vendor, preferred?: Vendor): Vendor => {
+    const role = cfg.roles.review;
+    const candidates: (Vendor | undefined)[] = [preferred, role?.vendor, role?.fallback, 'claude', 'codex', 'agy', 'copilot'];
+    const found = candidates.find((v): v is Vendor => !!v && v !== author && v !== 'ollama');
+    if (!found) throw new Error(`cross-vendor review required: no reviewer vendor other than ${author}`);
+    return found;
+  };
+
   const settle = (t: Task, o: RunOutcome) => {
     if (o.status === 'ratelimited') {
       const given = Date.parse(o.result.resetAt ?? '');
@@ -69,6 +82,56 @@ export async function runEngine(
       saveConfig(root, cfg);
       appendRun(root, { task: t.id, vendor: t.vendor, event: `paused until ${until}`, tokensIn: 0, tokensOut: 0 });
       setStatus(root, t.id, 'queued', { reason: `rate limited on ${t.vendor}` });
+      return;
+    }
+    if (o.status === 'blocked' && o.report?.questions?.length) {
+      for (const q of o.report.questions) appendQuestion(root, t.id, q);
+      appendRun(root, { task: t.id, vendor: t.vendor, event: 'question', tokensIn: 0, tokensOut: 0 });
+      setStatus(root, t.id, 'blocked', { reason: o.reason ?? 'waiting for answer' });
+      return;
+    }
+    if (o.status === 'done' && t.role === 'review' && t.reviewOf && o.report?.findings?.length) {
+      const round = t.round ?? 1;
+      if (round >= cfg.maxReviewRounds) {
+        const q = `Review still has findings after ${cfg.maxReviewRounds} rounds: ${o.report.findings.join('; ')}. Merge anyway, or give direction?`;
+        appendQuestion(root, t.id, q);
+        appendRun(root, { task: t.id, vendor: t.vendor, event: 'question', tokensIn: 0, tokensOut: 0 });
+        setStatus(root, t.id, 'blocked', { reason: `review findings after ${cfg.maxReviewRounds} rounds` });
+        return;
+      }
+      setStatus(root, t.id, 'done', { reason: undefined });
+      const impl = readTask(root, t.reviewOf);
+      const fixId = nextTaskId(root);
+      const findingsMd = `### Findings from ${t.id}\n${o.report.findings.map(f => `- ${f}`).join('\n')}`;
+      createTask(
+        root,
+        {
+          id: fixId,
+          title: `Fix review findings for ${impl.id} (round ${round})`,
+          role: 'implement',
+          vendor: impl.vendor,
+          deps: [t.id],
+          writesCode: true,
+          ...(impl.worktree ? { worktree: impl.worktree } : {}),
+        },
+        `Address the review findings from ${t.id} on ${impl.id}.`,
+        findingsMd,
+      );
+      const reviewId = nextTaskId(root);
+      createTask(
+        root,
+        {
+          id: reviewId,
+          title: `Review ${impl.id} (round ${round + 1})`,
+          role: 'review',
+          vendor: pickReviewer(impl.vendor, t.vendor),
+          deps: [fixId],
+          writesCode: false,
+          reviewOf: impl.id,
+          round: round + 1,
+        },
+        `Re-review ${impl.id} after fixes in ${fixId}.`,
+      );
       return;
     }
     const status = o.status === 'done' ? 'done' : o.status; // failed | blocked | cancelled
@@ -97,7 +160,8 @@ export async function runEngine(
         const v = pickVendor(t);
         if (!v || live(v) >= cfg.vendors[v].maxParallel) continue;
         handoff(t);
-        const started = setStatus(root, t.id, 'running', { vendor: v });
+        const worktree = t.worktree ?? (t.writesCode && existsSync(join(root, '.git')) ? ensureWorktree(root, t.id) : undefined);
+        const started = setStatus(root, t.id, 'running', { vendor: v, ...(worktree ? { worktree } : {}) });
         runningVendor.set(t.id, v);
         running.set(t.id, (async () => {
           let o: RunOutcome;

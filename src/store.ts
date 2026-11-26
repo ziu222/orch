@@ -10,6 +10,11 @@ const readJsonl = <T>(p: string): T[] =>
   existsSync(p) ? readFileSync(p, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as T) : [];
 
 export function createTask(root: string, t: Omit<Task, 'status'>, taskMd: string, contextMd = ''): Task {
+  if (t.role === 'review' && t.reviewOf && existsSync(taskJson(root, t.reviewOf))) {
+    if (readTask(root, t.reviewOf).vendor === t.vendor) {
+      throw new Error(`cross-vendor review required: ${t.id} cannot review ${t.reviewOf} on ${t.vendor}`);
+    }
+  }
   const task: Task = { ...t, status: 'queued' };
   mkdirSync(taskDir(root, t.id), { recursive: true });
   writeFileSync(taskJson(root, t.id), JSON.stringify(task, null, 2));

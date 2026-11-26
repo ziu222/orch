@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpRoot } from './helpers.ts';
-import { createTask, readTask, listTasks, readRuns, taskDir } from '../src/store.ts';
+import { createTask, readTask, listTasks, readRuns, readQuestions, taskDir } from '../src/store.ts';
 import { loadConfig, saveConfig, defaultConfig } from '../src/config.ts';
 import { runEngine, validateDag } from '../src/engine.ts';
+import { answerTask } from '../src/cli.ts';
 import type { Report, Role, Task, Vendor } from '../src/types.ts';
 import type { RunOutcome } from '../src/runner.ts';
 
@@ -33,7 +34,7 @@ function fakeRun(decide: (t: Task) => Partial<RunOutcome> = () => ({}), ms = 30)
 
 test('runs in dependency order', async () => {
   const root = tmpRoot();
-  add(root, 'T-001', 'claude'); add(root, 'T-002', 'gemini', ['T-001']); add(root, 'T-003', 'codex', ['T-002']);
+  add(root, 'T-001', 'claude'); add(root, 'T-002', 'agy', ['T-001']); add(root, 'T-003', 'codex', ['T-002']);
   const f = fakeRun();
   const r = await runEngine(root, { run: f.run });
   assert.deepEqual(f.starts.map(s => s.id), ['T-001', 'T-002', 'T-003']);
@@ -60,14 +61,14 @@ test('cycle and unknown dep are rejected', async () => {
 
 test('rate limit pauses vendor and reroutes queued tasks to fallback', async () => {
   const root = tmpRoot();
-  add(root, 'T-001', 'gemini'); add(root, 'T-002', 'gemini', ['T-001']); add(root, 'T-003', 'gemini', ['T-001']);
+  add(root, 'T-001', 'agy'); add(root, 'T-002', 'agy', ['T-001']); add(root, 'T-003', 'agy', ['T-001']);
   const now = () => new Date('2026-11-26T12:00:00Z');
-  const f = fakeRun(t => (t.vendor === 'gemini' ? { status: 'ratelimited', report: null, result: { ...res, rateLimited: true, resetAt: '2026-11-26T14:00:00.000Z' } } : {}));
+  const f = fakeRun(t => (t.vendor === 'agy' ? { status: 'ratelimited', report: null, result: { ...res, rateLimited: true, resetAt: '2026-11-26T14:00:00.000Z' } } : {}));
   await runEngine(root, { run: f.run, now });
-  assert.deepEqual(f.starts.filter(s => s.vendor === 'gemini').map(s => s.id), ['T-001']);
+  assert.deepEqual(f.starts.filter(s => s.vendor === 'agy').map(s => s.id), ['T-001']);
   assert.ok(listTasks(root).every(t => t.status === 'done' && t.vendor === 'codex'));
-  assert.equal(loadConfig(root).vendors.gemini.pausedUntil, '2026-11-26T14:00:00.000Z');
-  assert.ok(readRuns(root).some(e => e.vendor === 'gemini' && e.event.startsWith('paused')));
+  assert.equal(loadConfig(root).vendors.agy.pausedUntil, '2026-11-26T14:00:00.000Z');
+  assert.ok(readRuns(root).some(e => e.vendor === 'agy' && e.event.startsWith('paused')));
 });
 
 test('a paused vendor with no usable fallback leaves the task queued and the engine exits', async () => {
@@ -96,7 +97,7 @@ test('failed dependency blocks dependants, transitively', async () => {
 
 test('handoff appends each dependency summary and files to context.md', async () => {
   const root = tmpRoot();
-  add(root, 'T-001', 'gemini'); add(root, 'T-002', 'codex', ['T-001']);
+  add(root, 'T-001', 'agy'); add(root, 'T-002', 'codex', ['T-001']);
   await runEngine(root, { run: fakeRun().run });
   const ctx = readFileSync(join(taskDir(root, 'T-002'), 'context.md'), 'utf8');
   assert.match(ctx, /T-001 summary/);
@@ -123,11 +124,16 @@ test('abort stops new starts and running tasks end cancelled', async () => {
   assert.equal(readTask(root, 'T-002').status, 'queued');
 });
 
-test('blocked outcome (worker question) leaves the task blocked', async () => {
+test('blocked outcome (worker question) leaves the task blocked and records questions', async () => {
   const root = tmpRoot();
-  add(root, 'T-001', 'gemini');
+  add(root, 'T-001', 'agy');
   await runEngine(root, { run: fakeRun(() => ({ status: 'blocked', report: { ...ok(), questions: ['Which mailer?'] } })).run });
   assert.equal(readTask(root, 'T-001').status, 'blocked');
+  assert.deepEqual(readQuestions(root, 'T-001'), [{ q: 'Which mailer?' }]);
+  assert.ok(readRuns(root).some(e => e.task === 'T-001' && e.event === 'question'));
+  answerTask(root, 'T-001', 'nodemailer');
+  assert.equal(readTask(root, 'T-001').status, 'queued');
+  assert.match(readFileSync(join(taskDir(root, 'T-001'), 'context.md'), 'utf8'), /Answer from user: nodemailer/);
 });
 
 test('a reset time in the past still pauses the vendor (no retry burst)', async () => {
@@ -165,10 +171,36 @@ test('an error while recording an outcome fails that task without stranding the 
 
 test('a finished task does not keep an old reason', async () => {
   const root = tmpRoot();
-  add(root, 'T-001', 'gemini');
-  const f = fakeRun(t => (t.vendor === 'gemini' ? { status: 'ratelimited', report: null, result: { ...res, rateLimited: true } } : {}), 5);
+  add(root, 'T-001', 'agy');
+  const f = fakeRun(t => (t.vendor === 'agy' ? { status: 'ratelimited', report: null, result: { ...res, rateLimited: true } } : {}), 5);
   await runEngine(root, { run: f.run });
   const t = readTask(root, 'T-001');
   assert.equal(t.status, 'done');
   assert.equal(t.reason, undefined);
+});
+
+test('review findings spawn fix + re-review, capped at maxReviewRounds', async () => {
+  const root = tmpRoot();
+  add(root, 'T-001', 'codex', [], 'implement', true);
+  createTask(root, { id: 'T-002', title: 'Review T-001', role: 'review', vendor: 'claude', deps: ['T-001'], writesCode: false, reviewOf: 'T-001', round: 1 }, 'review');
+  const f = fakeRun(t => (t.role === 'review' ? { status: 'done', report: { ...ok(), findings: ['missing null check'] } } : {}), 5);
+  await runEngine(root, { run: f.run });
+  const all = listTasks(root);
+  const reviews = all.filter(t => t.role === 'review');
+  const fixes = all.filter(t => t.role === 'implement' && t.id !== 'T-001');
+  assert.equal(reviews.length, 2);
+  assert.equal(fixes.length, 1);
+  assert.equal(fixes[0].vendor, 'codex');
+  assert.equal(reviews[1].vendor, 'claude');
+  assert.equal(reviews[1].status, 'blocked');
+  assert.match(readQuestions(root, reviews[1].id)[0].q, /after 2 rounds/);
+});
+
+test('same-vendor review is refused at task creation', () => {
+  const root = tmpRoot();
+  add(root, 'T-001', 'codex', [], 'implement', true);
+  assert.throws(
+    () => createTask(root, { id: 'T-002', title: 'bad review', role: 'review', vendor: 'codex', deps: ['T-001'], writesCode: false, reviewOf: 'T-001' }, 'review'),
+    /cross-vendor review required/,
+  );
 });
