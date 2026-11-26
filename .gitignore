@@ -1,0 +1,28 @@
+# Agent-local files (each machine keeps its own)
+/CLAUDE.md
+/CLAUDE.local.md
+/AGENTS.md
+/GEMINI.md
+.claude/
+.codex/
+.gemini/
+.cursor/
+.impeccable/
+.mcp.json
+
+# orch runtime state
+.orch/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets
+.env
+.env.*
