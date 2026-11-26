@@ -1,0 +1,848 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>orch Console</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=Caveat:wght@500;600&family=EB+Garamond:ital,wght@0,400..600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* One navy-ink hardcover notebook lying open: bookcloth cover, one ruled page, index tabs on the fore edge. One hue only. */
+:root{
+  --cover:#22356b; --cover-deep:#17254d; --cover-ink:#e9eefb;
+  --paper:#f8faff; --paper-2:#eef2fb; --fill:#e3e9f7;
+  --line:#d3dcf0; --line-2:#b7c4e3; --rule:#7f92c4;
+  --ink:#142042; --ink-2:#44578c; --accent:#2a3f7a; --on-accent:#f3f6fd;
+  --shadow:rgba(10,18,44,.28); --lamp:none;
+  --n1:#f1df9c; --n2:#c9dfc4; --n3:#c7d9ef; --n4:#ecc9cf; --n5:#d9cfee; --n6:#f0d2b6; --on-note:#1d2747;
+  --f-head:"Archivo","Arial Narrow",sans-serif; --f-body:"EB Garamond",Garamond,"Times New Roman",serif; --f-mono:"JetBrains Mono",Consolas,monospace; --f-hand:"Caveat","Segoe Print",cursive;
+  --lh:28px; --pad:16px; --row:1;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --cover:#070b1a; --cover-deep:#03060f; --cover-ink:#cfd9f2;
+  --paper:#17213e; --n1:#cdb75e; --n2:#95b28d; --n3:#90abcf; --n4:#c79ba3; --n5:#ab9dcd; --n6:#cba385; --lamp:radial-gradient(ellipse 62% 70% at 36% 0%,rgba(190,208,255,.16),rgba(190,208,255,.05) 45%,transparent 75%); --paper-2:#18223f; --fill:#1e2a4c;
+  --line:#243258; --line-2:#31416d; --rule:#5b6fa6;
+  --ink:#e3e9f8; --ink-2:#a3b3db; --accent:#9fb4ea; --on-accent:#0d1530;
+  --shadow:rgba(0,0,0,.55); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --cover:#070b1a; --cover-deep:#03060f; --cover-ink:#cfd9f2;
+  --paper:#17213e; --n1:#cdb75e; --n2:#95b28d; --n3:#90abcf; --n4:#c79ba3; --n5:#ab9dcd; --n6:#cba385; --lamp:radial-gradient(ellipse 62% 70% at 36% 0%,rgba(190,208,255,.16),rgba(190,208,255,.05) 45%,transparent 75%); --paper-2:#18223f; --fill:#1e2a4c;
+  --line:#243258; --line-2:#31416d; --rule:#5b6fa6;
+  --ink:#e3e9f8; --ink-2:#a3b3db; --accent:#9fb4ea; --on-accent:#0d1530;
+  --shadow:rgba(0,0,0,.55); color-scheme:dark}
+:root.compact{--pad:10px;--row:.8;--lh:24px}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{color:var(--ink);font:15px/1.45 var(--f-head);font-stretch:92%;overflow:hidden;
+  background-color:var(--cover);
+  background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(0,0,0,.09) 0 1px,transparent 1px 3px)}
+::selection{background:var(--accent);color:var(--on-accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line-2);border:2px solid var(--paper);border-radius:6px}
+input,textarea{caret-color:var(--accent)}
+.num,td,dd,b{font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* book: cover with corner guards, page, fore-edge tabs */
+.book{position:relative;height:100%;display:grid;grid-template-columns:1fr 58px;padding:18px 0 18px 18px}
+.book::before,.book::after{content:"";position:fixed;width:34px;height:34px;background:var(--cover-deep);z-index:0}
+.book::before{left:0;top:0;clip-path:polygon(0 0,100% 0,0 100%)}
+.book::after{left:0;bottom:0;clip-path:polygon(0 0,100% 100%,0 100%)}
+.page{position:relative;z-index:1;min-width:0;min-height:0;background:var(--lamp),var(--paper);border-radius:2px 3px 3px 2px;
+  box-shadow:inset 18px 0 22px -18px var(--shadow),1px 0 0 var(--paper-2),2px 0 0 var(--line-2),3px 0 0 var(--paper-2),4px 0 0 var(--line-2),5px 1px 0 var(--paper-2),8px 6px 18px var(--shadow);
+  display:flex;flex-direction:column;padding:16px 22px 26px 30px}
+.ribbon{position:absolute;top:-4px;left:44%;width:12px;height:64px;background:var(--cover-deep);clip-path:polygon(0 0,100% 0,100% 100%,50% 82%,0 100%);box-shadow:none;z-index:2}
+.folio{position:absolute;bottom:6px;right:22px;font:500 11px var(--f-mono);color:var(--ink-2)}
+
+/* printed page header */
+.phead{display:flex;align-items:flex-end;gap:20px;padding-bottom:8px;border-bottom:3px double var(--rule)}
+.phead h1{margin:0;font:700 34px/1 var(--f-head);font-stretch:66%;letter-spacing:.01em;text-transform:uppercase}
+.phead .spacer{flex:1}
+.field{display:flex;align-items:flex-end;gap:6px;font:600 11px var(--f-head);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.field span{display:inline-block;min-width:44px;border-bottom:1px solid var(--rule);padding:0 4px 1px;font:600 14px/1.2 var(--f-mono);letter-spacing:0;text-transform:none;color:var(--ink);text-align:center}
+.iconbtn{display:inline-grid;place-items:center;width:30px;height:30px;border:1.5px solid var(--ink-2);background:transparent;border-radius:3px;cursor:pointer;color:var(--ink)}
+.iconbtn:hover{border-color:var(--ink)}
+.iconbtn svg{width:16px;height:16px}
+.sample{font:500 11px var(--f-mono);color:var(--ink-2);border:1px solid var(--line-2);border-radius:2px;padding:2px 6px}
+.tally{display:flex;flex-wrap:wrap;gap:4px 22px;padding:8px 0 10px;font-size:13px;color:var(--ink-2)}
+.tally b{font:600 15px var(--f-head);color:var(--ink);margin-right:4px}
+
+.panel{display:none;flex:1;min-height:0;flex-direction:column;gap:12px;padding-top:12px}
+.panel.on{display:flex;animation:ink .16s cubic-bezier(.16,1,.3,1) both}
+@keyframes ink{from{opacity:.4;transform:translateY(3px)}to{opacity:1;transform:none}}
+h2{margin:0;font:700 12.5px/1.2 var(--f-head);font-stretch:72%;letter-spacing:.16em;text-transform:uppercase;text-wrap:balance}
+.box{border:1px solid var(--line-2);border-radius:2px;background:var(--paper)}
+.box>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line-2);min-height:40px}
+.hint{font-size:12px;color:var(--ink-2)}
+.mono{font-family:var(--f-mono);font-size:12px}
+.vm{display:inline-grid;place-items:center;min-width:24px;min-height:18px;line-height:1.3;padding:0 3px;border:1.5px solid var(--ink);border-radius:2px;font:600 11px var(--f-mono);letter-spacing:.02em;flex:none}
+.vm.solid{background:var(--ink);color:var(--paper)}
+
+/* vendor strip: quota + queue */
+.vendors{display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+.q{padding:10px 14px calc(10px*var(--row));border-right:1px solid var(--line-2);min-width:0;cursor:pointer;background:none;border-top:0;border-bottom:0;border-left:0;text-align:left;display:flex;flex-direction:column;gap:6px}
+.q:last-child{border-right:0}
+.q[aria-pressed="true"]{background:var(--fill)}
+.q:disabled{cursor:default}
+.q .vn{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+.q .tag{margin-left:auto;font:500 11px var(--f-mono);color:var(--ink-2)}
+.meter{display:grid;grid-template-columns:40px 1fr 40px;gap:8px;align-items:center;font-size:12.5px}
+.meter .lbl{color:var(--ink-2)}
+.track{position:relative;height:8px;border:1px solid var(--ink-2);background:var(--paper)}
+.track i{position:absolute;inset:0 auto 0 0;display:block;background:var(--accent)}
+.track.hot i{background:repeating-linear-gradient(-45deg,var(--accent) 0 3px,var(--paper) 3px 5px)}
+.track::after{content:"";position:absolute;left:80%;top:-4px;bottom:-4px;border-left:1.5px dashed var(--ink)}
+.meter b{text-align:right;font-size:14px}
+.queue{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:12px;color:var(--ink-2);border-top:1px dashed var(--line-2);padding-top:6px;min-height:26px}
+.queue .run{color:var(--ink);font-weight:600}
+.queue span{display:inline-flex;align-items:center;gap:5px}.sq{width:11px;height:11px;flex:none}
+.qfoot{font-size:12px;color:var(--ink-2);display:flex;justify-content:space-between;gap:8px}
+.qfoot .hot{color:var(--ink);font-weight:700;text-decoration:underline;text-decoration-thickness:2px}
+
+/* workspace columns */
+.work{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.35fr) 268px;gap:14px}
+.work>*,.panel,.page{min-width:0}
+.chat,.graph,.margin{min-height:0;display:flex;flex-direction:column}
+.msgs{flex:1;min-height:0;overflow:auto;padding:0 14px calc(var(--lh)*1.5) 46px;display:flex;flex-direction:column;
+  background:linear-gradient(90deg,transparent 34px,var(--rule) 34px 35px,transparent 35px 37px,var(--rule) 37px 38px,transparent 38px) 0 0/100% 100% local,linear-gradient(to bottom,transparent calc(var(--lh) - 1px),var(--line) calc(var(--lh) - 1px)) 0 0/100% var(--lh) local}
+:root.pg-dots .msgs{background:linear-gradient(90deg,transparent 34px,var(--rule) 34px 35px,transparent 35px 37px,var(--rule) 37px 38px,transparent 38px) 0 0/100% 100% local,radial-gradient(var(--line-2) 1px,transparent 1.4px) 0 0/var(--lh) var(--lh) local}
+:root.pg-plain .msgs{background:none}
+.m{max-width:62ch;font:17px/var(--lh) var(--f-body);margin-top:var(--lh)}
+.m .who{font:600 11px/var(--lh) var(--f-head);font-stretch:75%;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);margin-right:8px}
+.m.me{align-self:flex-end;background:var(--fill);padding:0 12px;border-radius:2px}
+.out{margin:4px 0 0;padding:6px 10px;background:var(--paper-2);border:1px solid var(--line-2);border-radius:2px;font:12.5px/1.6 var(--f-mono);white-space:pre-wrap;overflow-x:auto}
+.chip{font:600 12px var(--f-mono);border:1.5px solid var(--ink);background:var(--paper);padding:0 5px;border-radius:2px;cursor:pointer;vertical-align:1px;color:var(--ink)}
+.chip:hover{background:var(--ink);color:var(--paper)}
+.compose{border-top:1px solid var(--line-2);padding:10px;display:flex;flex-direction:column;gap:8px}
+.cmds{display:flex;gap:6px;flex-wrap:wrap}
+.cmds button{font:500 12px var(--f-mono);border:1px solid var(--line-2);background:transparent;padding:2px 8px;border-radius:2px;cursor:pointer}
+.cmds button:hover{border-color:var(--ink)}
+.row{display:flex;gap:8px;align-items:flex-end}
+textarea,input[type=text]{min-width:0;border:1.5px solid var(--ink-2);background:var(--paper);border-radius:2px;padding:9px 11px;font:16px/1.4 var(--f-body)}
+textarea{flex:1;resize:none;height:44px}
+textarea::placeholder,input::placeholder{color:var(--ink-2)}
+textarea:focus,input[type=text]:focus{border-color:var(--ink);outline:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border:1.5px solid var(--accent);background:var(--accent);color:var(--on-accent);font:600 13px var(--f-head);font-stretch:80%;letter-spacing:.12em;text-transform:uppercase;border-radius:2px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.btn svg{width:16px;height:16px}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--ink-2)}
+.btn.ghost:hover{border-color:var(--ink);background:var(--fill);color:var(--ink)}
+.btn.small{height:32px;padding:0 10px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* graph on dot grid */
+.graph{position:relative}
+.canvas{flex:1;min-height:0;overflow:auto;background:radial-gradient(var(--line-2) 1px,transparent 1.4px) 8px 8px/16px 16px local}
+:root.pg-plain .canvas{background:none}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--ink-2);flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend svg{width:14px;height:14px}
+svg.dag text{fill:var(--ink)}
+.node{cursor:pointer}
+.node .lr{fill:var(--paper);stroke:var(--ink-2);stroke-width:1.25}
+.node:hover .lr,.node:focus .lr{stroke:var(--ink);stroke-width:2}
+.node:focus{outline:none}
+.node:focus-visible .lr{stroke:var(--accent);stroke-width:3}
+.node .box-st{fill:var(--paper);stroke:var(--ink);stroke-width:1.5}
+.node.s-done .box-st{fill:var(--ink)}
+.node .tick{fill:none;stroke:var(--paper);stroke-width:2}
+.node.s-running .box-st{fill:url(#half)}
+.node.s-running .lr{stroke:var(--ink);stroke-width:1.75}
+.node.s-running .pulse{fill:var(--accent);animation:blink 1s steps(2) infinite}
+.node.s-queued .lr,.node.s-cancelled .lr,.node.s-blocked .lr{stroke-dasharray:4 3;fill:var(--paper-2)}
+.node.s-error .box-st{fill:url(#hatch)}
+.node.sel .lr{stroke:var(--accent);stroke-width:3}
+.nid{font:600 12px var(--f-mono)}
+.nt{font:600 13.5px var(--f-head)}
+.nm{font:12px var(--f-head);fill:var(--ink-2)!important}
+.vmk rect{fill:var(--paper);stroke:var(--ink);stroke-width:1.25}.vmk text{font:600 10px var(--f-mono)}
+.edge{fill:none;stroke:var(--ink-2);stroke-width:1.25}
+.edge.live{stroke:var(--ink);stroke-width:2}
+.stamp rect{fill:var(--paper);stroke:var(--ink);stroke-width:1.5}.stamp text{font:700 11px var(--f-head);letter-spacing:.1em;text-transform:uppercase}
+@keyframes blink{50%{opacity:.25}}
+
+/* index card detail: the only raised sheet */
+.work.has-detail .margin{display:none}
+.detail{position:relative;min-height:0;grid-column:3;grid-row:1;
+  background:var(--paper);box-shadow:3px 6px 16px var(--shadow);padding:14px 16px;overflow:auto;animation:ink .16s cubic-bezier(.16,1,.3,1) both}
+.detail::before{content:"";position:absolute;left:0;right:0;top:52px;border-top:3px double var(--rule)}
+.detail h3{margin:0 34px 0 0;min-height:30px;font:700 18px/1.2 var(--f-head);font-stretch:78%}
+.detail .close{position:absolute;top:8px;right:8px}
+.state{display:inline-block;margin-top:16px;font:600 11px var(--f-head);letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border:1.5px solid var(--ink);border-radius:2px}
+.state.running,.state.done{background:var(--ink);color:var(--paper)}
+.state.error{border-style:double;border-width:3px}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:0 14px;margin:10px 0;font-size:13.5px;line-height:24px}
+dl.kv dt{color:var(--ink-2);border-bottom:1px solid var(--line)}dl.kv dd{margin:0;text-align:right;border-bottom:1px solid var(--line)}
+.report{font:16px/24px var(--f-body);margin:0 0 10px}
+.errslip{border:3px double var(--ink);padding:6px 10px;font-size:13.5px;margin:10px 0;transform:rotate(-.6deg)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+select{height:32px;border:1.5px solid var(--ink-2);background:var(--paper);border-radius:2px;padding:0 6px}
+
+/* margin column: question notes + timeline */
+.margin{gap:12px;border-left:3px double var(--rule);padding-left:14px}
+.margin h2{display:flex;justify-content:space-between;align-items:baseline}
+.qnotes{display:flex;flex-direction:column;gap:12px;overflow:auto;max-height:340px;padding:4px 4px 6px 2px}
+.qnote{background:color-mix(in oklab,var(--n1) 55%,var(--paper));color:var(--on-note);padding:10px 12px 12px;border-radius:1px;box-shadow:1px 2px 5px var(--shadow);transform:rotate(-.7deg)}
+.qnote:nth-child(2n){transform:rotate(.6deg)}
+.qnote header{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--on-note)}
+.qnote .hand{color:var(--on-note)}
+.qnote .chip{background:transparent;border-color:var(--on-note);color:var(--on-note)}
+.qnote input{background:rgba(255,255,255,.5);border-color:var(--on-note);color:var(--on-note)}
+.qnote input::placeholder{color:#3d4870}
+.qnote .btn{background:var(--on-note);border-color:var(--on-note);color:#f3f6fd}
+.hand{font:500 20px/1.15 var(--f-hand);color:var(--ink)}
+.qnote p{margin:6px 0 8px}
+.qnote form{display:flex;gap:6px}
+.qnote input{flex:1;height:32px;padding:4px 8px;font-size:15px}
+.empty{color:var(--ink-2)}
+.timeline{flex:1;min-height:0;overflow:auto;margin:0;padding:0;list-style:none}
+.timeline li{display:grid;grid-template-columns:42px 1fr;gap:6px;align-items:baseline;border-bottom:1px solid var(--line);padding:3px 0}
+.timeline time{font:500 11.5px var(--f-mono);color:var(--ink-2)}
+.timeline .hand{font-size:18px}
+
+/* files */
+.files{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.3fr);gap:14px}
+.files .box{display:flex;flex-direction:column;min-height:0;min-width:0}.files>*,.rules>*,.rcol>*{min-width:0}
+.tree{flex:1;min-height:0;overflow:auto;padding:8px 6px 12px;font-size:13.5px}
+.tree ul{list-style:none;margin:0;padding:0 0 0 14px}
+.tree>ul{padding-left:0}
+.tree summary{cursor:pointer;padding:3px 6px;font:600 12.5px var(--f-mono);list-style:none;display:flex;align-items:center;gap:6px;border-radius:2px}
+.tree summary::-webkit-details-marker{display:none}
+.tree summary::before{content:"";width:0;height:0;border:4px solid transparent;border-left:6px solid var(--ink-2);margin-right:2px}
+.tree details[open]>summary::before{transform:rotate(90deg) translateX(2px)}
+.tree summary .cnt{margin-left:auto;font:500 11px var(--f-mono);color:var(--ink-2)}
+.frow{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:8px;width:100%;padding:3px 6px;border:0;background:none;text-align:left;cursor:pointer;border-radius:2px}
+.frow:hover{background:var(--paper-2)}
+.frow[aria-current="true"]{background:var(--fill);font-weight:600}
+.frow .fn{font-family:var(--f-mono);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .who{display:flex;gap:4px}
+.tk{font:600 11px var(--f-mono);border:1px solid var(--ink-2);border-radius:2px;padding:1px 4px;white-space:nowrap}
+.tk.more{border-style:dashed}
+.frow.quiet .fn{color:var(--ink-2)}
+.fs{display:inline-grid;place-items:center;width:16px;height:16px;border:1.5px solid var(--ink);border-radius:2px;font:700 11px var(--f-mono);line-height:1;flex:none}
+.fs-A{background:var(--ink);color:var(--paper)}
+.fs-R{border-style:dashed;color:var(--ink-2)}
+.fs-none{border-color:transparent}
+.fdetail{flex:1;min-height:0;overflow:auto;padding:12px 16px}
+.fdetail h3{margin:0 0 4px;font:600 15px var(--f-mono);word-break:break-all}
+.fdetail .state{margin-top:6px}
+.touch{list-style:none;margin:10px 0 14px;padding:0}
+.touch li{display:grid;grid-template-columns:auto auto 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.touch .act{color:var(--ink-2);font-size:13px}
+.touch .delta{font:600 12px var(--f-mono)}
+.diff{margin:0;border:1px solid var(--line-2);border-radius:2px;font:12.5px/1.65 var(--f-mono);overflow:auto;background:var(--paper)}
+.diff div{padding:0 12px;white-space:pre}
+.diff .hd{background:var(--paper-2);color:var(--ink-2);border-bottom:1px solid var(--line-2)}
+.diff .add{background:var(--fill)}
+.diff .add::before{content:"+ ";font-weight:700}
+.diff .del{color:var(--ink-2);text-decoration:line-through}
+.diff .del::before{content:"− "}
+.diff .ctx::before{content:"  "}
+
+/* rules & skills */
+.rules{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px}
+.rules .box{display:flex;flex-direction:column;min-height:0}
+.rules>section.box{align-self:start;max-height:100%}
+.agentsmd{flex:1;min-height:200px;height:auto;border:0;border-radius:0;padding:0 14px;font:13.5px/var(--lh) var(--f-mono);
+  background:linear-gradient(to bottom,transparent calc(var(--lh) - 1px),var(--line) calc(var(--lh) - 1px)) 0 0/100% var(--lh) local,var(--paper)}
+.agentsmd:focus{outline:2px solid var(--accent);outline-offset:-2px}
+.rcol{display:flex;flex-direction:column;gap:14px;min-height:0}.rcol .grow{flex:1}
+.reads{width:100%;border-collapse:collapse;font-size:13px}
+.reads td{padding:7px 12px;border-top:1px solid var(--line)}.reads tr:first-child td{border-top:0}
+.reads td:first-child{white-space:nowrap}
+.status{font-size:12.5px;color:var(--ink-2);min-height:18px}.status:empty{display:none}
+table.skills{width:100%;border-collapse:collapse;font-size:13.5px}
+.skills th{position:sticky;top:0;background:var(--paper-2);text-align:center;font:600 11px var(--f-head);letter-spacing:.1em;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--line-2)}
+.skills th:first-child{text-align:left;padding-left:12px}
+.skills td{padding:6px;border-bottom:1px solid var(--line);text-align:center}
+.skills td:first-child{text-align:left;padding-left:12px}
+.skills .sname{font-weight:600}.skills .spath{display:block;font:11.5px var(--f-mono);color:var(--ink-2)}
+.cb{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;cursor:pointer}
+.cb input{appearance:none;-webkit-appearance:none;margin:0;width:18px;height:18px;border:1.5px solid var(--ink);border-radius:1px;background:var(--paper);cursor:pointer}
+.cb input:checked{background:var(--ink)}
+.cb svg{position:absolute;inset:3px;width:14px;height:14px;fill:none;stroke:var(--paper);stroke-width:2;display:none;pointer-events:none}
+.cb input:checked+svg{display:block}
+.cb input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.linkbtn{background:none;border:0;padding:4px;color:var(--ink-2);text-decoration:underline;cursor:pointer;font-size:12.5px}
+.linkbtn:hover{color:var(--ink)}
+.install{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line-2)}
+.install input{flex:1;height:36px;font:13px var(--f-mono)}
+
+/* usage ledger */
+table.ledger{width:100%;border-collapse:collapse;font-size:13.5px}
+.ledger th{position:sticky;top:0;background:var(--paper);text-align:left;font:600 11.5px var(--f-head);letter-spacing:.1em;text-transform:uppercase;padding:8px 12px;border-bottom:3px double var(--rule);white-space:nowrap}
+.ledger td{padding:12px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.ledger .r{text-align:right;white-space:nowrap}
+.ledger .vn{display:flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap}
+.ledger .dim{color:var(--ink-2)}
+.ledger .src{font-size:12px;color:var(--ink-2);max-width:26ch}
+.lm{display:grid;grid-template-columns:minmax(80px,140px) 40px;gap:8px;align-items:center}.lm b{text-align:right}
+.spark{display:flex;gap:6px;align-items:stretch}
+.sbars{display:flex;align-items:flex-end;gap:2px;width:150px;height:36px;border-bottom:1px solid var(--ink-2);border-left:1px solid var(--ink-2);padding-left:2px}
+.sbars i{flex:1;display:block;background:var(--accent)}.sbars i.now{background:var(--ink)}
+.scale{display:flex;flex-direction:column;justify-content:space-between;font:11px/1 var(--f-mono);color:var(--ink-2)}
+.note{font:15px/1.5 var(--f-body);color:var(--ink-2);max-width:68ch;margin:0}
+
+/* log */
+.tablewrap{flex:1;min-height:0;overflow:auto}
+table.log{width:100%;border-collapse:collapse;font-size:13.5px}
+.log th{position:sticky;top:0;background:var(--paper-2);text-align:left;font:600 11.5px var(--f-head);letter-spacing:.1em;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--line-2)}
+.log td{padding:7px 12px;border-bottom:1px solid var(--line)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* appearance */
+.prefs{display:grid;gap:22px;max-width:720px;overflow:auto;align-content:start}
+fieldset{border:0;padding:0;margin:0}
+legend{font:700 12.5px var(--f-head);font-stretch:72%;letter-spacing:.16em;text-transform:uppercase;margin-bottom:10px}
+.seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:2px;flex-wrap:wrap}
+.seg label{cursor:pointer;position:relative}
+.seg input{position:absolute;opacity:0}
+.seg span{display:block;padding:8px 16px;font:600 13px var(--f-head);letter-spacing:.06em}
+.seg input:checked+span{background:var(--ink);color:var(--paper)}
+.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-4px}
+
+/* fore-edge index tabs, graded navy */
+.rail{position:relative;z-index:2;display:flex;flex-direction:column;gap:3px;padding:30px 0}
+.tab{flex:var(--ext) 1 0;min-height:64px;border:0;border-radius:0 7px 7px 0;margin-left:-2px;margin-right:12px;cursor:pointer;background:var(--th);color:var(--on-note);
+  writing-mode:vertical-rl;font:600 12.5px var(--f-head);font-stretch:78%;letter-spacing:.16em;text-transform:uppercase;display:flex;align-items:center;justify-content:center;box-shadow:2px 2px 4px var(--shadow)}
+.tab:hover{margin-right:8px}
+.tab[aria-selected="true"]{margin-right:0;margin-left:-20px;font-weight:700;border-radius:0 8px 8px 0;box-shadow:3px 3px 8px var(--shadow)}
+:root[data-theme="dark"] .qnote{background:var(--n1)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .qnote{background:var(--n1)}}
+@media (prefers-reduced-motion: reduce){.node.s-running .pulse{animation:none}.panel.on,.detail{animation:none}}
+
+@media (max-width:1280px){.work{grid-template-columns:minmax(280px,.9fr) minmax(0,1.3fr)}.margin{grid-column:1/-1;border-left:0;padding-left:0;border-top:3px double var(--rule);padding-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:14px;max-height:260px}.margin>div{min-height:0;display:flex;flex-direction:column;gap:10px}.qnotes{max-height:none}.work{grid-template-rows:auto auto;flex:none}.chat{height:560px}.graph{height:auto;min-height:560px}.graph .canvas{flex:none;overflow:visible}.detail{grid-column:1/-1;grid-row:2}body{overflow:auto}.book{height:auto;min-height:100%}.margin{max-height:none}.timeline{max-height:240px}}
+@media (max-width:1180px){.vendors{grid-template-columns:repeat(3,minmax(0,1fr))}.q:nth-child(-n+3){border-bottom:1px solid var(--line-2)}.q:nth-child(3){border-right:0}}
+@media (max-width:860px){
+  body{overflow:auto}
+  .book{height:auto;min-height:100%;grid-template-columns:1fr;padding:10px 10px calc(70px + env(safe-area-inset-bottom,0px))}
+  .page{padding:12px 14px 26px 18px}
+  .ribbon{left:auto;right:14px;height:40px}
+  .phead{flex-wrap:wrap;gap:10px}
+  .phead h1{font-size:26px}
+  .vendors{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .q{border-right:1px solid var(--line-2)!important;border-bottom:1px solid var(--line-2)}.q:nth-child(2n){border-right:0!important}
+  .work{display:contents}#tally{order:0}.margin{order:1;display:flex;flex-direction:column;max-height:none;border-top:0;padding-top:0}.vendors{order:2}.graph{order:3;min-height:440px}.chat{order:4;max-height:70vh;min-height:360px}
+  .timeline{max-height:220px}
+  .q .meter+.meter,.q .queue,.q .qfoot{display:none}.q{gap:4px;padding:8px 12px}
+  .detail{position:fixed;inset:auto 0 0 0;top:auto;width:auto;max-height:72vh;z-index:6;border-top:1.5px solid var(--ink);padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  .rules,.files{grid-template-columns:1fr}.files .box{min-height:360px}
+  .rules .box{min-height:420px}
+  .rail{position:fixed;left:0;right:0;bottom:0;z-index:5;flex-direction:row;align-items:flex-end;gap:3px;padding:0 10px env(safe-area-inset-bottom,0px);height:calc(60px + env(safe-area-inset-bottom,0px));background:var(--cover)}
+  .tab{writing-mode:horizontal-tb;min-height:0;min-width:0;height:44px;margin:0!important;padding:0 2px;border-radius:7px 7px 0 0;flex:1 1 0;font-size:11px;letter-spacing:.02em;line-height:1.15}
+  .tab[aria-selected="true"]{height:54px}
+}
+@media (max-width:560px){.ribbon{display:none}.vendors{grid-template-columns:1fr}.q{border-right:0!important}.tally{gap:2px 14px}}
+</style>
+
+<div class="book" id="book" data-section="workspace">
+  <main class="page">
+    <span class="ribbon" aria-hidden="true"></span>
+    <header class="phead">
+      <h1 id="secName">Bàn làm việc</h1>
+      <span class="spacer"></span>
+      <span class="field">Trang<span id="pageNo">01</span></span>
+      <span class="field">Ngày<span id="dateF">--</span></span>
+      <span class="field">Giờ<span id="clock" class="num">--:--</span></span>
+      <span class="sample">dữ liệu mẫu</span>
+      <button class="iconbtn" id="pause" aria-label="Tạm dừng mô phỏng" title="Tạm dừng mô phỏng"></button>
+    </header>
+
+    <section class="panel on" id="p-workspace" role="tabpanel" aria-labelledby="t-workspace">
+      <h2 class="sr">Tổng kết hôm nay</h2>
+      <div class="tally" id="tally" style="padding:0"></div>
+      <h2 class="sr">Hạn mức và hàng đợi theo hãng</h2>
+      <div class="vendors box" id="vendors"></div>
+      <div class="work">
+        <section class="chat box" aria-label="Chat với orch">
+          <header><h2>Chat</h2><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span></header>
+          <div class="msgs" id="msgs" aria-live="polite"></div>
+          <form class="compose" id="compose">
+            <div class="cmds" id="cmds">
+              <button type="button" data-cmd="/stats">/stats</button>
+              <button type="button" data-cmd="/artifact Trang giới thiệu typing web">/artifact</button>
+              <button type="button" data-cmd="/cancel T-014">/cancel</button>
+              <button type="button" data-cmd="Thêm chế độ luyện gõ tiếng Việt có dấu">yêu cầu mẫu</button>
+            </div>
+            <div class="row">
+              <label for="input" class="sr">Tin nhắn cho orch</label>
+              <textarea id="input" placeholder="Nhắn cho orch hoặc gõ /lệnh…"></textarea>
+              <button class="btn" type="submit">Gửi <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M2 8h11M9 4l4 4-4 4"/></svg></button>
+            </div>
+          </form>
+        </section>
+        <section class="graph box" aria-label="Đồ thị task">
+          <header><h2>Đồ thị task</h2>
+            <span class="legend">
+              <span><svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" fill="var(--ink)"/><path d="M4.5 7l2 2 3.5-4" fill="none" stroke="var(--paper)" stroke-width="1.6"/></svg>xong</span>
+              <span><svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" fill="url(#half)" stroke="var(--ink)" stroke-width="1.5"/></svg>đang chạy</span>
+              <span><svg viewBox="0 0 14 14"><rect x="1" y="3" width="12" height="8" fill="none" stroke="var(--ink-2)" stroke-dasharray="3 2"/></svg>chờ</span>
+              <span><svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" fill="url(#hatch)" stroke="var(--ink)" stroke-width="1.5"/></svg>lỗi</span>
+            </span></header>
+          <div class="canvas" id="canvas"></div>
+        </section>
+        <aside class="margin" aria-label="Ghi chú lề">
+          <div>
+            <h2>Câu hỏi chờ trả lời <span class="hint" id="qCount"></span></h2>
+            <div class="qnotes" id="qnotes"></div>
+          </div>
+          <div style="min-height:0;display:flex;flex-direction:column;gap:6px;flex:1">
+            <h2>Dòng thời gian</h2>
+            <ol class="timeline" id="timeline"></ol>
+          </div>
+        </aside>
+        <aside class="detail box" id="detail" hidden aria-live="polite"></aside>
+      </div>
+    </section>
+
+    <section class="panel" id="p-files" role="tabpanel" aria-labelledby="t-files">
+      <p class="note">Cây thư mục của repo đang làm. Mỗi file ghi task nào, agent nào đã đọc hoặc sửa nó. orch lấy từ <span class="mono">git status</span> trong worktree của từng task và từ phần <span class="mono">files</span> trong report.json.</p>
+      <div class="toolbar">
+        <div class="seg" role="radiogroup" aria-label="Lọc file">
+          <label><input type="radio" name="ff" value="all" checked><span>Tất cả</span></label>
+          <label><input type="radio" name="ff" value="changed"><span>Có thay đổi</span></label>
+          <label><input type="radio" name="ff" value="read"><span>Bot đã đọc</span></label></div>
+        <label for="ftask" class="sr">Lọc theo task</label>
+        <select id="ftask"><option value="">Mọi task</option></select>
+        <span class="legend"><span><span class="fs fs-A">A</span>thêm</span><span><span class="fs fs-M">M</span>sửa</span><span><span class="fs fs-R">R</span>chỉ đọc</span></span>
+      </div>
+      <div class="files">
+        <section class="box" aria-labelledby="h-tree"><header><h2 id="h-tree">typing-web</h2><span class="hint mono">main + worktree orch/t-014</span></header>
+          <div class="tree" id="tree"></div></section>
+        <section class="box" aria-labelledby="h-file"><header><h2 id="h-file">File</h2><span class="hint" id="fwhere"></span></header>
+          <div class="fdetail" id="fdetail"></div></section>
+      </div>
+    </section>
+
+    <section class="panel" id="p-rules" role="tabpanel" aria-labelledby="t-rules">
+      <p class="note">Luật chung và skill ở đây áp dụng cho mọi agent. orch ghi luật vào <span class="mono">AGENTS.md</span> ở gốc repo và chép skill vào thư mục skill của từng CLI trước mỗi lần chạy.</p>
+      <div class="rules">
+        <div class="rcol">
+        <section class="box grow" aria-labelledby="h-agents">
+          <header><h2 id="h-agents">Luật chung · AGENTS.md</h2>
+            <span class="row"><button class="btn small ghost" type="button" id="agentsReset">Hoàn tác</button><button class="btn small" type="button" id="agentsSave">Lưu</button></span></header>
+          <label for="agentsMd" class="sr">Nội dung AGENTS.md</label>
+          <textarea class="agentsmd" id="agentsMd" spellcheck="false"></textarea>
+          <div class="status" id="agentsStatus" role="status" style="padding:6px 12px;border-top:1px solid var(--line-2)"></div>
+        </section>
+        <section class="box" aria-labelledby="h-reads">
+          <header><h2 id="h-reads">Mỗi agent đọc luật từ đâu</h2></header>
+          <table class="reads"><tbody>
+            <tr><td><span class="vm">CL</span> Claude Code</td><td><span class="mono">CLAUDE.md</span>, một dòng trỏ về AGENTS.md</td></tr>
+            <tr><td><span class="vm">CX</span> Codex CLI</td><td><span class="mono">AGENTS.md</span>, đọc trực tiếp</td></tr>
+            <tr><td><span class="vm">GE</span> Gemini CLI</td><td><span class="mono">GEMINI.md</span>, một dòng trỏ về AGENTS.md</td></tr>
+            <tr><td><span class="vm">OL</span> Ollama</td><td>orch chèn luật vào đầu prompt mỗi task</td></tr>
+          </tbody></table>
+        </section>
+        </div>
+        <section class="box" aria-labelledby="h-skills">
+          <header><h2 id="h-skills">Skill dùng chung</h2><span class="hint">Tích để agent được dùng skill</span></header>
+          <div class="tablewrap"><table class="skills"><thead><tr><th>Skill</th><th>CL</th><th>CX</th><th>GE</th><th>OL</th><th><span class="sr">Gỡ</span></th></tr></thead><tbody id="skills"></tbody></table></div>
+          <form class="install" id="install">
+            <label for="skillPath" class="sr">Đường dẫn thư mục skill</label>
+            <input type="text" id="skillPath" placeholder="skills/ten-skill/" autocomplete="off">
+            <button class="btn small" type="submit">Cài skill</button>
+          </form>
+          <div class="status" id="skillStatus" role="status" style="padding:0 12px 8px"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="panel" id="p-usage" role="tabpanel" aria-labelledby="t-usage">
+      <p class="note">Số token đọc từ output JSON và log local của từng CLI. Phần trăm hạn mức là ước tính, trừ khi hãng tự báo. Vạch đứt ở 80% là ngưỡng orch ngừng giao thêm task cho hãng đó.</p>
+      <div class="tablewrap"><table class="ledger"><thead><tr><th>Hãng</th><th>5 giờ / ngày</th><th>Tuần</th><th>Reset</th><th class="r">Token phiên</th><th>5 giờ qua · mỗi cột 15 phút</th><th class="r">Song song</th><th>Nguồn số liệu</th></tr></thead><tbody id="usage"></tbody></table></div>
+    </section>
+
+    <section class="panel" id="p-log" role="tabpanel" aria-labelledby="t-log">
+      <div class="toolbar"><h2>runs.jsonl</h2>
+        <label for="logFilter" class="sr">Lọc theo hãng</label>
+        <select id="logFilter"><option value="">Mọi hãng</option><option value="claude">Claude Code</option><option value="codex">Codex CLI</option><option value="gemini">Gemini CLI</option><option value="ollama">Ollama (local)</option></select></div>
+      <div class="tablewrap box"><table class="log"><thead><tr><th>Giờ</th><th>Task</th><th>Hãng</th><th>Sự kiện</th><th style="text-align:right">Token</th></tr></thead><tbody id="log"></tbody></table></div>
+    </section>
+
+    <section class="panel" id="p-theme" role="tabpanel" aria-labelledby="t-theme">
+      <form class="prefs" id="prefs" onsubmit="return false">
+        <fieldset><legend>Chế độ</legend><div class="seg">
+          <label><input type="radio" name="mode" id="m-system" value="system"><span>Theo hệ thống</span></label>
+          <label><input type="radio" name="mode" id="m-light" value="light"><span>Ngày</span></label>
+          <label><input type="radio" name="mode" id="m-dark" value="dark"><span>Đêm</span></label></div></fieldset>
+        <fieldset><legend>Kiểu trang</legend><div class="seg">
+          <label><input type="radio" name="paper" id="pg-lines" value="lines"><span>Kẻ ngang</span></label>
+          <label><input type="radio" name="paper" id="pg-dots" value="dots"><span>Chấm</span></label>
+          <label><input type="radio" name="paper" id="pg-plain" value="plain"><span>Trơn</span></label></div></fieldset>
+        <fieldset><legend>Mật độ</legend><div class="seg">
+          <label><input type="radio" name="density" id="d-comfy" value="comfy"><span>Thoải mái</span></label>
+          <label><input type="radio" name="density" id="d-compact" value="compact"><span>Gọn</span></label></div></fieldset>
+        <p class="note">Trang sổ dùng một màu xanh mực; chỉ tab và giấy note mang màu. Các hãng phân biệt bằng ô chữ viết tắt (CL, CX, GE, OL, GR), trạng thái phân biệt bằng kiểu tô. Lựa chọn được lưu trong trình duyệt này.</p>
+      </form>
+    </section>
+    <span class="folio" id="folio">orch · 01</span>
+  </main>
+  <nav class="rail" role="tablist" aria-label="Các phần" aria-orientation="vertical">
+    <button class="tab" role="tab" id="t-workspace" aria-controls="p-workspace" aria-selected="true" data-sec="workspace" style="--th:var(--n1);--ext:6">Bàn làm việc</button>
+    <button class="tab" role="tab" id="t-files" aria-controls="p-files" aria-selected="false" data-sec="files" style="--th:var(--n2);--ext:4">Thư mục</button>
+    <button class="tab" role="tab" id="t-rules" aria-controls="p-rules" aria-selected="false" data-sec="rules" style="--th:var(--n3);--ext:4">Quy tắc</button>
+    <button class="tab" role="tab" id="t-usage" aria-controls="p-usage" aria-selected="false" data-sec="usage" style="--th:var(--n4);--ext:3">Usage</button>
+    <button class="tab" role="tab" id="t-log" aria-controls="p-log" aria-selected="false" data-sec="log" style="--th:var(--n5);--ext:3">Nhật ký</button>
+    <button class="tab" role="tab" id="t-theme" aria-controls="p-theme" aria-selected="false" data-sec="theme" style="--th:var(--n6);--ext:3">Giao diện</button>
+  </nav>
+</div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" fill="var(--paper)"/><rect width="2" height="4" fill="var(--ink)"/></pattern>
+  <linearGradient id="half" x1="0" y1="1" x2="0" y2="0"><stop offset=".5" stop-color="var(--ink)"/><stop offset=".5" stop-color="var(--paper)"/></linearGradient>
+</defs></svg>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtK=n=>n>=1000?(n/1000).toFixed(1).replace('.',',')+'k':String(Math.round(n));
+const fmtN=n=>Math.round(n).toLocaleString('vi-VN');
+const pad=n=>String(n).padStart(2,'0');
+const hhmm=d=>pad(d.getHours())+':'+pad(d.getMinutes());
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const now0=Date.now();
+const V={
+  claude:{name:'Claude Code',code:'CL',w1:'5 giờ',p1:62,p2:38,reset:now0+112*6e4,max:2,rate:.0011,src:'output --output-format json · transcript ~/.claude/projects',hist:[]},
+  codex:{name:'Codex CLI',code:'CX',w1:'5 giờ',p1:41,p2:22,reset:now0+197*6e4,max:2,rate:.0006,src:'output exec --json · ~/.codex/sessions (cần kiểm chứng % hạn mức)',hist:[]},
+  gemini:{name:'Gemini CLI',code:'GE',w1:'Ngày',p1:18,p2:null,reset:now0+610*6e4,max:2,rate:.0003,src:'output -p --output-format json · lệnh /stats',hist:[]},
+  ollama:{name:'Ollama',code:'OL',local:true,model:'qwen3-coder:30b',w1:'local',p1:0,p2:null,max:1,rate:0,src:'API localhost:11434 · prompt_eval_count / eval_count',hist:[]},
+  grok:{name:'Grok',code:'GR',off:true}
+};
+for(const k of ['claude','codex','gemini']){for(let i=0;i<20;i++)V[k].hist.push(Math.round(rnd()*V[k].p1*1.6+4))}
+for(let i=0;i<20;i++)V.ollama.hist.push(Math.round(rnd()*30+4));
+
+const T=[
+ {id:'T-009',title:'Sửa lint',v:'gemini',role:'Khảo sát',st:'error',deps:[],tin:1180,tout:40,secs:21,err:'Gemini báo rate limit 5 phút trước. orch đã dừng giao việc cho Gemini và không retry.'},
+ {id:'T-011',title:'Lập kế hoạch',v:'claude',role:'Planner',st:'done',deps:[],tin:1640,tout:460,secs:38,verified:true,report:'Chia yêu cầu "reset mật khẩu" thành 6 task: khảo sát auth và mail, nén context, viết code, review chéo, verify.'},
+ {id:'T-012',title:'Khảo sát auth',v:'gemini',role:'Khảo sát',st:'done',deps:['T-011'],tin:16900,tout:1140,secs:94,verified:true,report:'Luồng đăng nhập ở src/auth/login.ts:12–88. Session lưu ở src/auth/session.ts:40. Chưa có bảng token reset.'},
+ {id:'T-013',title:'Khảo sát gửi mail',v:'gemini',role:'Khảo sát',st:'blocked',deps:['T-011'],tin:8200,tout:610,secs:51,left:3,q:'Template email reset viết tiếng Việt hay tiếng Anh? Repo có cả emails/vi và emails/en.',qAt:now0-4*6e4},
+ {id:'T-010',title:'Nén context auth',v:'ollama',role:'Tóm tắt (local)',st:'done',deps:['T-011'],tin:22400,tout:900,secs:64,verified:true,report:'Nén 22k token code auth còn 900 token tóm tắt cho T-014. Chạy trên máy, không tốn quota hãng.'},
+ {id:'T-014',title:'Viết reset mật khẩu',v:'codex',role:'Implement',st:'running',deps:['T-012','T-010'],tin:27140,tout:4020,secs:192,left:8,wt:'orch/t-014'},
+ {id:'T-015',title:'Review chéo',v:'claude',role:'Review (khác hãng với T-014)',st:'queued',deps:['T-013','T-014'],tin:0,tout:0,secs:0},
+ {id:'T-016',title:'Verify: chạy test',v:'codex',role:'Verify',st:'queued',deps:['T-015'],tin:0,tout:0,secs:0}
+];
+const REPORTS={'T-013':'Gửi mail qua src/lib/mailer.ts:8 (nodemailer). Template nằm ở emails/. Có sẵn hàm sendMail().','T-014':'Thêm src/auth/reset.ts, bảng password_resets, route POST /auth/reset. Test reset.spec.ts xanh.','T-015':'Review xong: thiếu giới hạn số lần gửi mail reset. Đã ghi chú, không chặn merge.','T-016':'npm test: 142 passed, 0 failed.'};
+let nextId=17;
+const ago=m=>hhmm(new Date(now0-m*6e4));
+const LOG=[
+ [24,'T-011','claude','xong · verified',2100],[22,'T-012','gemini','bắt đầu',0],[22,'T-013','gemini','bắt đầu',0],[21,'T-010','ollama','bắt đầu',0],
+ [20,'T-010','ollama','xong · verified',23300],[15,'T-012','gemini','xong · verified',18040],[14,'T-014','codex','bắt đầu · worktree orch/t-014',0],
+ [5,'T-009','gemini','lỗi · rate limit',1220],[4,'T-013','gemini','hỏi lại · chờ trả lời',0]
+].map(r=>({t:ago(r[0]),id:r[1],v:r[2],ev:r[3],tok:r[4]}));
+const MSGS=[
+ {me:true,text:'Thêm chức năng reset mật khẩu cho typing web'},
+ {text:'Đã lập 6 task. T-012 và T-013 Gemini khảo sát, T-010 Ollama nén context, T-014 Codex viết code trong worktree riêng, T-015 Claude review chéo, T-016 chạy test.'},
+ {text:'T-012 xong. Báo cáo có path và số dòng, planner đã kiểm tra lại.',out:'src/auth/login.ts:12–88\nsrc/auth/session.ts:40'},
+ {text:'T-013 đang hỏi bạn một câu ở ghi chú lề. T-015 chờ câu trả lời đó.'}
+];
+let sel=null,paused=false,section='workspace',vfilter=null;
+const byId=id=>T.find(t=>t.id===id);
+const runningOf=v=>T.filter(t=>t.v===v&&t.st==='running').length;
+const ST={done:'xong',running:'đang chạy',queued:'đang chờ',error:'lỗi',cancelled:'đã hủy',blocked:'chờ trả lời'};
+const SECS={workspace:'Bàn làm việc',files:'Thư mục',rules:'Quy tắc',usage:'Usage',log:'Nhật ký',theme:'Giao diện'};
+const PAGES={workspace:'01',files:'02',rules:'03',usage:'04',log:'05',theme:'06'};
+function remain(ts){const m=Math.max(0,Math.round((ts-Date.now())/6e4));return (m>=60?Math.floor(m/60)+' g ':'')+pad(m%60)+' ph'}
+const SQ={half:'<svg class="sq" viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" fill="url(#half)" stroke="currentColor" stroke-width="1.5"/></svg>',wait:'<svg class="sq" viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.25" stroke-dasharray="2.5 1.5"/></svg>'};
+function waitWhy(t){if(t.st==='blocked')return 'câu hỏi';const d=t.deps.find(d=>byId(d).st!=='done');if(d)return 'chờ '+d;if(V[t.v].p1>=80)return 'quota';return 'hết lượt song song'}
+
+function tally(){
+  const done=T.filter(t=>t.st==='done').length,err=T.filter(t=>t.st==='error').length,blk=T.filter(t=>t.st==='blocked').length;
+  const tok=T.reduce((s,t)=>s+t.tin+t.tout,0),loc=T.filter(t=>t.v==='ollama').reduce((s,t)=>s+t.tin+t.tout,0);
+  $('#tally').innerHTML=`<span><b>${done}</b>task xong</span><span><b>${err}</b>lỗi</span><span><b>${blk}</b>chờ trả lời</span><span><b>${fmtK(tok)}</b>token hôm nay</span><span><b>${fmtK(loc)}</b>token chạy trên Ollama, không tốn quota</span>`;
+}
+function vendors(){
+  $('#vendors').innerHTML=Object.entries(V).map(([k,v])=>{
+    if(v.off)return `<button class="q" type="button" disabled><span class="vn"><span class="vm">${v.code}</span>${v.name}<span class="tag">chưa kết nối</span></span>
+      <span class="qfoot"><span>Chưa có CLI chính hãng được xác nhận</span></span></button>`;
+    const run=T.filter(t=>t.v===k&&t.st==='running'),wait=T.filter(t=>t.v===k&&(t.st==='queued'||t.st==='blocked'));
+    const queue=(run.map(t=>`<span class="run">${SQ.half} ${t.id}</span>`).join('')+wait.map(t=>`<span>${SQ.wait} ${t.id} · ${waitWhy(t)}</span>`).join(''))||'<span>hàng đợi trống</span>';
+    const head=`<span class="vn"><span class="vm${vfilter===k?' solid':''}">${v.code}</span>${v.name}<span class="tag">${v.local?'local':'ước tính'}</span></span>`;
+    const label=`aria-pressed="${vfilter===k}" aria-label="Lọc đồ thị theo ${v.name}"`;
+    if(v.local)return `<button class="q" type="button" data-v="${k}" ${label}>${head}
+      <span class="meter"><span class="lbl">Model</span><span class="mono" style="grid-column:span 2">${v.model}</span></span>
+      <span class="meter"><span class="lbl">Quota</span><span style="grid-column:span 2">không giới hạn · chạy trên máy</span></span>
+      <span class="queue">${queue}</span><span class="qfoot"><span>trần theo VRAM</span><span>chạy ${run.length}/${v.max}</span></span></button>`;
+    const hot=v.p1>=80;
+    return `<button class="q" type="button" data-v="${k}" ${label}>${head}
+      <span class="meter"><span class="lbl">${v.w1}</span><span class="track${hot?' hot':''}"><i style="width:${Math.min(100,v.p1)}%"></i></span><b>${Math.round(v.p1)}%</b></span>
+      <span class="meter"><span class="lbl">Tuần</span>${v.p2==null?'<span class="lbl">không áp dụng</span><b>—</b>':`<span class="track"><i style="width:${v.p2}%"></i></span><b>${Math.round(v.p2)}%</b>`}</span>
+      <span class="queue">${queue}</span>
+      <span class="qfoot"><span>reset ${hhmm(new Date(v.reset))} · còn ${remain(v.reset)}</span><span class="${hot?'hot':''}">${hot?'ngừng giao · ':''}chạy ${run.length}/${v.max}</span></span></button>`}).join('');
+}
+function depth(t,memo={}){if(memo[t.id]!=null)return memo[t.id];return memo[t.id]=t.deps.length?1+Math.max(...t.deps.map(d=>depth(byId(d),memo))):0}
+function graph(){
+  requestAnimationFrame(()=>{const p=sel&&graph.pos&&graph.pos[sel],c=$('#canvas');if(p&&innerWidth>860){if(p.x+graph.W>c.scrollLeft+c.clientWidth||p.x<c.scrollLeft)c.scrollLeft=Math.max(0,p.x-16)}});
+  // ponytail: top-down layered layout (depth = row). Swap for dagre/elk if graphs get dense.
+  const narrow=innerWidth<=560,memo={},cols={},pos={};
+  const maxD=Math.max(...T.map(t=>depth(t,memo)));
+  const GX=24,GY=narrow?16:26,IND=12,NB=' ';
+  const perRow={};T.forEach(t=>{const d=depth(t,memo);perRow[d]=(perRow[d]||0)+1});const maxC=Math.max(...Object.values(perRow));
+  const cw=$('#canvas').clientWidth||600;
+  const W=narrow?Math.max(200,cw-36-maxD*IND):Math.max(132,Math.min(200,Math.floor((cw-32-GX*(maxC-1))/maxC)));
+  // word wrap measured with canvas; layout reruns after fonts load
+  const cx=graph.cx||(graph.cx=document.createElement('canvas').getContext('2d'));
+  const wrap=(str,px,font)=>{cx.font=font;const out=[];let line='';str.split(' ').forEach(w=>{const t=line?line+' '+w:w;if(line&&cx.measureText(t).width>px){out.push(line);line=w}else line=t});out.push(line);return out};
+  const metaOf=t=>t.st==='blocked'?['chờ','bạn','trả','lời'].join(NB):t.st==='queued'?(t.deps.length>1?'chờ'+NB+t.deps.length+NB+'task':t.deps.length?'chờ'+NB+t.deps[0]:'đang xếp hàng'):fmtK(t.tin+t.tout)+NB+'tok';
+  const L={};T.forEach(t=>{L[t.id]={tl:wrap(t.title,W-44,'600 13.5px Archivo'),ml:wrap(V[t.v].name+' · '+metaOf(t),W-40,'12px Archivo')}});
+  // node height = text it holds + 12px bottom padding; each row takes its tallest node
+  const need=id=>Math.max(64,38+L[id].tl.length*17+L[id].ml.length*15);
+  const hh={};
+  if(narrow){let y=14;T.slice().sort((a,b)=>depth(a,memo)-depth(b,memo)).forEach(t=>{hh[t.id]=need(t.id);pos[t.id]={x:24+depth(t,memo)*IND,y};y+=hh[t.id]+GY})}
+  else{const rowH={};T.forEach(t=>{const d=depth(t,memo);rowH[d]=Math.max(rowH[d]||0,need(t.id))});const rowY={};let y=18;for(let d=0;d<=maxD;d++){rowY[d]=y;y+=(rowH[d]||0)+GY}
+    T.forEach(t=>{const d=depth(t,memo);cols[d]=cols[d]||0;hh[t.id]=rowH[d];pos[t.id]={x:16+cols[d]*(W+GX),y:rowY[d]};cols[d]++})}
+  const maxX=Math.max(...Object.values(pos).map(p=>p.x))+W+(narrow?8:24),maxY=Math.max(...T.map(t=>pos[t.id].y+hh[t.id]))+16;
+  let edges='',nodes='';
+  T.forEach(t=>t.deps.forEach(d=>{const a=pos[d],b=pos[t.id];
+    const live=byId(d).st==='done'&&t.st==='running';
+    const ha=hh[d],hb=hh[t.id];const path=narrow?`M${a.x} ${a.y+ha/2}H${a.x-10}V${b.y+hb/2}H${b.x-5}`:`M${a.x+W/2} ${a.y+ha}V${b.y-GY/2}H${b.x+W/2}V${b.y-5}`;
+    edges+=`<path class="edge${live?' live':''}" d="${path}" marker-end="url(#ah)"/>`}));
+  graph.pos=pos;graph.W=W;
+  T.forEach(t=>{const p=pos[t.id],v=V[t.v],tok=t.tin+t.tout,dim=vfilter&&t.v!==vfilter;
+    const ln=L[t.id],H=hh[t.id];
+    nodes+=`<g class="node s-${t.st}${sel===t.id?' sel':''}" data-id="${t.id}" tabindex="0" role="button" aria-label="${t.id} ${esc(t.title)}, ${ST[t.st]}, ${v.name}" style="opacity:${dim?.3:''}">
+      <rect class="lr" x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="2"/>
+      <rect class="box-st" x="${p.x+10}" y="${p.y+H/2-7}" width="14" height="14"/>
+      ${t.st==='done'?`<path class="tick" d="M${p.x+13} ${p.y+H/2}l3 3 5-6"/>`:''}
+      ${t.st==='running'?`<circle class="pulse" cx="${p.x+W-40}" cy="${p.y+16}" r="3"/>`:''}
+      <g class="vmk"><rect x="${p.x+W-30}" y="${p.y+9}" width="22" height="14" rx="1.5"/><text x="${p.x+W-19}" y="${p.y+19.5}" text-anchor="middle">${v.code}</text></g>
+      <text class="nid" x="${p.x+32}" y="${p.y+22}">${t.id}</text>
+      ${ln.tl.map((x,i)=>`<text class="nt" x="${p.x+32}" y="${p.y+41+i*17}">${esc(x)}</text>`).join('')}
+      ${ln.ml.map((x,i)=>`<text class="nm" x="${p.x+32}" y="${p.y+41+ln.tl.length*17+i*15}">${esc(x)}</text>`).join('')}
+      ${t.st==='error'?`<g class="stamp"><rect x="${p.x+W-90}" y="${p.y-11}" width="82" height="20" transform="rotate(-3 ${p.x+W-49} ${p.y})"/><text x="${p.x+W-82}" y="${p.y+3}" transform="rotate(-3 ${p.x+W-49} ${p.y})">rate limit</text></g>`:''}
+    </g>`});
+  $('#canvas').innerHTML=`<svg class="dag" width="${maxX}" height="${maxY}" viewBox="0 0 ${maxX} ${maxY}" role="group" aria-label="Đồ thị phụ thuộc giữa các task">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-2)"/></marker></defs>${edges}${nodes}</svg>`;
+}
+function detail(){
+  const el=$('#detail');const t=byId(sel);
+  $('.work').classList.toggle('has-detail',!!t);
+  if(!t){el.hidden=true;return}
+  el.hidden=false;const v=V[t.v];
+  const alt=Object.keys(V).filter(k=>!V[k].off&&k!==t.v);
+  el.innerHTML=`<button class="iconbtn close" id="closeD" aria-label="Đóng chi tiết"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 3l10 10M13 3L3 13"/></svg></button>
+    <h3>${t.id} · ${esc(t.title)}</h3><span class="state ${t.st}">${ST[t.st]}</span>
+    ${t.err?`<div class="errslip">${esc(t.err)}</div>`:''}
+    ${t.q?`<p class="hand" style="margin:10px 0 0">“${esc(t.q)}”</p>`:''}
+    <dl class="kv"><dt>Hãng</dt><dd>${v.name}</dd><dt>Vai trò</dt><dd>${esc(t.role)}</dd>
+      <dt>Phụ thuộc</dt><dd>${t.deps.length?t.deps.join(', '):'không'}</dd>
+      <dt>Token vào / ra</dt><dd>${fmtN(t.tin)} / ${fmtN(t.tout)}</dd><dt>Thời gian</dt><dd>${Math.floor(t.secs/60)} ph ${pad(Math.round(t.secs%60))} s</dd>
+      ${t.wt?`<dt>Worktree</dt><dd class="mono">${t.wt}</dd>`:''}<dt>Verified</dt><dd>${t.verified?'có':t.st==='done'?'không':'—'}</dd></dl>
+    ${t.report?`<p class="report">${esc(t.report)}</p>`:t.st==='running'?'<p class="report">Đang chạy. Báo cáo sẽ hiện khi worker ghi report.json.</p>':''}
+    <div class="out">.orch/<wbr>tasks/<wbr>${t.id.toLowerCase()}/<wbr>report.json</div>
+    <div class="actions">
+      ${t.st==='running'||t.st==='queued'||t.st==='blocked'?`<button class="btn small ghost" data-act="cancel">Hủy task</button>`:''}
+      ${t.st==='error'||t.st==='cancelled'||t.st==='done'?`<label for="altV" class="sr">Chạy lại bằng hãng</label><select id="altV">${[t.v,...alt].filter(k=>!(V[k].local&&t.wt)).map(k=>`<option value="${k}">${V[k].name}</option>`).join('')}</select><button class="btn small" data-act="rerun">Chạy lại</button>`:''}
+    </div>`;
+}
+function say(text,out){MSGS.push({text,out});chat()}
+function chat(){
+  const box=$('#msgs');
+  box.innerHTML=MSGS.map(m=>{const body=esc(m.text).replace(/T-\d{3}/g,id=>byId(id)?`<button class="chip" data-open="${id}">${id}</button>`:id);
+    return `<div class="m${m.me?' me':''}">${m.me?'':'<span class="who">orch</span>'}${body}${m.out?`<pre class="out">${esc(m.out)}</pre>`:''}</div>`}).join('');
+  box.scrollTop=box.scrollHeight;
+}
+function margin(){
+  const qs=T.filter(t=>t.st==='blocked'&&t.q);
+  $('#qCount').textContent=qs.length?qs.length+' câu':'';
+  const keep=document.activeElement&&document.activeElement.closest('.qnote')?document.activeElement.closest('.qnote').dataset.id:null;
+  if(keep)return; // ponytail: don't redraw under a half-typed answer
+  $('#qnotes').innerHTML=qs.length?qs.map(t=>`<article class="qnote" data-id="${t.id}"><header><button class="chip" data-open="${t.id}">${t.id}</button><span>${V[t.v].name} · ${Math.max(1,Math.round((Date.now()-t.qAt)/6e4))} phút trước</span></header>
+      <p class="hand">${esc(t.q)}</p>
+      <form data-answer="${t.id}"><label for="ans-${t.id}" class="sr">Trả lời ${t.id}</label><input type="text" id="ans-${t.id}" placeholder="Trả lời…" autocomplete="off"><button class="btn small" type="submit">Gửi</button></form></article>`).join('')
+    :'<p class="hand empty">Không có câu hỏi nào đang chờ.</p>';
+}
+function timeline(){
+  $('#timeline').innerHTML=LOG.slice(-9).reverse().map(r=>`<li><time>${r.t}</time><span class="hand">${r.id} ${esc(r.ev)}</span></li>`).join('');
+}
+function usage(){
+  const cell=(p,hot)=>p==null?'<td class="dim">không áp dụng</td>':`<td><span class="lm"><span class="track${hot?' hot':''}"><i style="width:${Math.min(100,p)}%"></i></span><b>${Math.round(p)}%</b></span></td>`;
+  $('#usage').innerHTML=Object.entries(V).map(([k,v])=>{
+    const name=`<td><span class="vn"><span class="vm">${v.code}</span>${v.name}</span></td>`;
+    if(v.off)return `<tr>${name}<td colspan="7" class="dim">Chưa kết nối. Nếu xAI không có CLI chính hãng dùng được bằng gói thuê bao, orch dùng API key qua adapter riêng hoặc bỏ Grok.</td></tr>`;
+    const mx=Math.max(...v.hist),tok=T.filter(t=>t.v===k).reduce((s,t)=>s+t.tin+t.tout,0);
+    const spark=`<td><span class="spark" role="img" aria-label="Token mỗi 15 phút trong 5 giờ qua, đỉnh ${mx}k"><span class="sbars">${v.hist.map((h,i)=>`<i class="${i===v.hist.length-1?'now':''}" style="height:${Math.max(6,h/mx*100)}%"></i>`).join('')}</span><span class="scale"><span>${mx}k</span><span>0</span></span></span></td>`;
+    if(v.local)return `<tr>${name}<td class="dim">không có quota · local</td><td class="dim">—</td><td class="dim mono">${v.model}</td><td class="r">${fmtK(tok)}</td>${spark}<td class="r">${runningOf(k)} / ${v.max}</td><td class="src">${esc(v.src)}</td></tr>`;
+    return `<tr>${name}${cell(v.p1,v.p1>=80)}${cell(v.p2)}<td>${hhmm(new Date(v.reset))}<span class="dim"> · ${v.w1}</span></td><td class="r">${fmtK(tok)}</td>${spark}<td class="r">${runningOf(k)} / ${v.max}</td><td class="src">${esc(v.src)}</td></tr>`}).join('');
+}
+function log(){
+  const f=$('#logFilter').value;
+  $('#log').innerHTML=LOG.filter(r=>!f||r.v===f).slice().reverse().map(r=>`<tr><td>${r.t}</td><td class="mono">${r.id}</td><td><span class="vm">${V[r.v].code}</span> ${V[r.v].name}</td><td>${esc(r.ev)}</td><td style="text-align:right">${r.tok?fmtN(r.tok):'—'}</td></tr>`).join('');
+}
+function addLog(id,ev,tok){const t=byId(id);LOG.push({t:hhmm(new Date()),id,v:t.v,ev,tok:tok||0})}
+function renderAll(){tally();vendors();graph();detail();margin();timeline();if(section==='usage')usage();if(section==='log')log();
+  const d=new Date();$('#clock').textContent=hhmm(d);$('#dateF').textContent=pad(d.getDate())+'·'+pad(d.getMonth()+1)}
+
+/* files: who touched what (sample) */
+const FILES=[
+ {p:'AGENTS.md',st:'M',by:[{act:'sửa ở ngăn Quy tắc',d:'+2 −0'}],diff:[['hd','@@ AGENTS.md'],['ctx','- Kẹt thì ghi câu hỏi vào questions, không đoán.'],['add','- Dùng skill trong skills/ khi task khớp mô tả của skill.']]},
+ {p:'package.json',st:''},
+ {p:'src/auth/login.ts',st:'R',by:[{t:'T-012',act:'đọc dòng 12–88'},{t:'T-010',act:'đọc để nén context'}]},
+ {p:'src/auth/session.ts',st:'M',by:[{t:'T-012',act:'đọc dòng 40'},{t:'T-014',act:'sửa trong orch/t-014',d:'+6 −1'}],diff:[['hd','@@ -38,4 +38,9 @@ export function createSession'],['ctx','  const token = randomToken()'],['del','  return store.set(userId, token)'],['add','  await store.set(userId, token)'],['add','  return token'],['add','}'],['add',''],['add','export async function revokeAll(userId: string) {'],['add','  await store.deleteByUser(userId)']]},
+ {p:'src/auth/reset.ts',st:'A',by:[{t:'T-014',act:'tạo mới trong orch/t-014',d:'+58'}],diff:[['hd','@@ new file src/auth/reset.ts'],['add',"import { sendMail } from '../lib/mailer'"],['add',"import { revokeAll } from './session'"],['add',''],['add','export async function requestReset(email: string) {'],['add','  const user = await users.findByEmail(email)'],['add','  if (!user) return // không lộ email có tồn tại hay không'],['add','  const token = randomToken()'],['add','  await resets.insert({ userId: user.id, token, expiresAt: inMinutes(30) })'],['add',"  await sendMail(user.email, 'reset', { token })"],['add','}']]},
+ {p:'src/lib/mailer.ts',st:'R',by:[{t:'T-013',act:'đọc dòng 8'}]},
+ {p:'src/routes/auth.ts',st:'M',by:[{t:'T-014',act:'sửa trong orch/t-014',d:'+12 −2'}],diff:[['hd','@@ -21,6 +21,16 @@ router.post'],['ctx',"router.post('/login', login)"],['add',"router.post('/auth/reset', async (req, res) => {"],['add','  await requestReset(req.body.email)'],['add','  res.status(202).end()'],['add','})']]},
+ {p:'db/migrations/20261126_password_resets.sql',st:'A',by:[{t:'T-014',act:'tạo mới trong orch/t-014',d:'+14'}],diff:[['hd','@@ new file'],['add','CREATE TABLE password_resets ('],['add','  user_id    INTEGER NOT NULL REFERENCES users(id),'],['add','  token      TEXT NOT NULL UNIQUE,'],['add','  expires_at TIMESTAMP NOT NULL'],['add',');']]},
+ {p:'emails/vi/reset.html',st:''},{p:'emails/en/reset.html',st:''},
+ {p:'tests/reset.spec.ts',st:'A',by:[{t:'T-014',act:'tạo mới trong orch/t-014',d:'+41'},{t:'T-016',act:'sẽ chạy khi verify'}],diff:[['hd','@@ new file tests/reset.spec.ts'],['add',"test('reset does not reveal unknown email', async () => {"],['add',"  const r = await post('/auth/reset', { email: 'nobody@example.test' })"],['add','  expect(r.status).toBe(202)'],['add','})']]}
+];
+let fsel='src/auth/reset.ts';
+const ftaskSel=$('#ftask');
+ftaskSel.innerHTML+=[...new Set(FILES.flatMap(f=>(f.by||[]).map(b=>b.t).filter(Boolean)))].sort().map(t=>'<option>'+t+'</option>').join('');
+const whoMark=b=>{if(!b.t)return '<span class="vm">bạn</span>';const t=byId(b.t);return '<span class="vm">'+(t?V[t.v].code:'?')+'</span>'};
+function fileOk(f,mode,task){if(mode==='changed'&&!(f.st==='A'||f.st==='M'))return false;if(mode==='read'&&!(f.by||[]).some(b=>/đọc/.test(b.act)))return false;if(task&&!(f.by||[]).some(b=>b.t===task))return false;return true}
+function tree(){
+  const mode=(document.querySelector('input[name=ff]:checked')||{}).value||'all',task=ftaskSel.value;
+  const root={};FILES.filter(f=>fileOk(f,mode,task)).forEach(f=>{const parts=f.p.split('/');let n=root;parts.slice(0,-1).forEach(d=>{n=n[d+'/']=n[d+'/']||{}});n[parts[parts.length-1]]=f});
+  const count=n=>Object.values(n).reduce((s,v)=>s+(v.p?((v.st==='A'||v.st==='M')?1:0):count(v)),0);
+  const render=n=>'<ul>'+Object.keys(n).sort((a,b)=>(b.endsWith('/')-a.endsWith('/'))||a.localeCompare(b)).map(k=>{const v=n[k];
+    if(!v.p){const c=count(v);return '<li><details open><summary>'+esc(k)+(c?'<span class="cnt">'+c+' đổi</span>':'')+'</summary>'+render(v)+'</details></li>'}
+    const tags=[...new Set((v.by||[]).map(b=>b.t?b.t+' '+(byId(b.t)?V[byId(b.t).v].code:''):'bạn'))];
+    const marks=tags.slice(0,2).map(x=>'<span class="tk">'+esc(x)+'</span>').join('')+(tags.length>2?'<span class="tk more">+'+(tags.length-2)+'</span>':'');
+    return '<li><button class="frow'+(v.st?'':' quiet')+'" type="button" data-file="'+esc(v.p)+'" aria-current="'+(fsel===v.p)+'"><span class="fs '+(v.st?'fs-'+v.st:'fs-none')+'" aria-label="'+({A:'thêm',M:'sửa',R:'chỉ đọc'}[v.st]||'không đổi')+'">'+(v.st||'')+'</span><span class="fn">'+esc(k)+'</span><span class="who">'+marks+'</span></button></li>'}).join('')+'</ul>';
+  $('#tree').innerHTML=Object.keys(root).length?render(root):'<p class="hand empty" style="padding:8px">Không có file nào khớp bộ lọc.</p>';
+  fileDetail();
+}
+function fileDetail(){
+  const f=FILES.find(x=>x.p===fsel);
+  if(!f){$('#fdetail').innerHTML='<p class="note">Chọn một file ở cây bên trái.</p>';$('#fwhere').textContent='';return}
+  const inWt=(f.by||[]).some(b=>b.act.includes('orch/t-014'));
+  $('#fwhere').textContent=inWt?'trong worktree orch/t-014 · chưa merge':f.st==='M'?'nhánh chính · chưa commit':'';
+  const st={A:'Thêm mới',M:'Đã sửa',R:'Chỉ được đọc','':'Không đổi'}[f.st];
+  const rows=(f.by||[]).map(b=>{const t=b.t&&byId(b.t);return '<li>'+whoMark(b)+(b.t?'<button class="chip" data-open="'+b.t+'">'+b.t+'</button>':'<b>Bạn</b>')+'<span class="act">'+(t?V[t.v].name+' · ':'')+esc(b.act)+'</span><span class="delta">'+(b.d||'')+'</span></li>'}).join('');
+  $('#fdetail').innerHTML='<h3>'+esc(f.p)+'</h3><span class="state">'+st+'</span>'+
+    (rows?'<ul class="touch">'+rows+'</ul>':'<p class="note" style="margin:12px 0">Chưa task nào đụng tới file này.</p>')+
+    (f.diff?'<div class="diff" role="region" aria-label="Thay đổi trong file">'+f.diff.map(([k,l])=>'<div class="'+k+'">'+esc(l)+'</div>').join('')+'</div>':'');
+}
+$('#tree').addEventListener('click',e=>{const b=e.target.closest('[data-file]');if(b){fsel=b.dataset.file;tree()}});
+$('#p-files').addEventListener('change',e=>{if(e.target.name==='ff'||e.target.id==='ftask')tree()});
+$('#fdetail').addEventListener('click',e=>{const c=e.target.closest('[data-open]');if(c){e.stopPropagation();setSection('workspace');openTask(c.dataset.open)}});
+setTimeout(tree,0);
+
+/* rules & skills (sample, kept in this browser) */
+const AGENTS_DEFAULT=`# AGENTS.md — luật chung cho mọi agent
+
+- Chỉ làm trong thư mục task hoặc worktree được giao.
+- Không đọc .env, khóa SSH hay file nằm trong .gitignore.
+- Chạy test hoặc lệnh verify trước khi báo xong; chỉ ghi verified: true khi đã chạy.
+- Báo cáo bằng report.json: summary, files kèm số dòng, confidence.
+- Kẹt thì ghi câu hỏi vào questions, không đoán.
+- Dùng skill trong skills/ khi task khớp mô tả của skill.`;
+const AG=['claude','codex','gemini','ollama'];
+const SKILLS_DEFAULT=[
+  {n:'verification-before-completion',on:{claude:1,codex:1,gemini:1,ollama:1}},
+  {n:'code-review',on:{claude:1,codex:1}},
+  {n:'test-driven-development',on:{claude:1,codex:1}},
+  {n:'systematic-debugging',on:{claude:1,codex:1,gemini:1}},
+  {n:'writing-plans',on:{claude:1}}
+];
+let agentsSaved=store.get('orch-agents')||AGENTS_DEFAULT;
+const skills=store.get('orch-skills')||SKILLS_DEFAULT;
+$('#agentsMd').value=agentsSaved;
+function skillRows(){
+  $('#skills').innerHTML=skills.map((s,i)=>`<tr><td><span class="sname">${esc(s.n)}</span><span class="spath">skills/${esc(s.n)}/SKILL.md</span></td>
+    ${AG.map(a=>`<td><label class="cb"><input type="checkbox" data-i="${i}" data-a="${a}" ${s.on[a]?'checked':''} aria-label="${esc(s.n)} cho ${V[a].name}"><svg viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7"/></svg></label></td>`).join('')}
+    <td><button class="linkbtn" type="button" data-rm="${i}">Gỡ</button></td></tr>`).join('');
+}
+skillRows();
+$('#agentsSave').onclick=()=>{agentsSaved=$('#agentsMd').value;store.set('orch-agents',agentsSaved);$('#agentsStatus').textContent='Đã lưu lúc '+hhmm(new Date())+'. Lần chạy tới orch ghi vào AGENTS.md, CLAUDE.md và GEMINI.md.'};
+$('#agentsReset').onclick=()=>{$('#agentsMd').value=agentsSaved;$('#agentsStatus').textContent='Đã bỏ các thay đổi chưa lưu.'};
+$('#agentsMd').addEventListener('input',()=>{$('#agentsStatus').textContent=$('#agentsMd').value===agentsSaved?'':'Có thay đổi chưa lưu.'});
+$('#skills').addEventListener('change',e=>{const c=e.target.closest('input[data-i]');if(!c)return;skills[c.dataset.i].on[c.dataset.a]=c.checked?1:0;store.set('orch-skills',skills)});
+$('#skills').addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(!b)return;const s=skills.splice(+b.dataset.rm,1)[0];store.set('orch-skills',skills);skillRows();$('#skillStatus').textContent=`Đã gỡ ${s.n}.`});
+$('#install').addEventListener('submit',e=>{e.preventDefault();const raw=$('#skillPath').value.trim();
+  const m=raw.replace(/\\/g,'/').replace(/\/SKILL\.md$/i,'').replace(/\/$/,'').split('/').pop();
+  if(!raw||!/^[a-z0-9][a-z0-9-]*$/i.test(m||'')){$('#skillStatus').textContent='Nhập đường dẫn tới thư mục skill, ví dụ skills/review-checklist/.';return}
+  if(skills.some(s=>s.n===m)){$('#skillStatus').textContent=`${m} đã có trong danh sách.`;return}
+  skills.push({n:m,on:{claude:1,codex:1,gemini:1}});store.set('orch-skills',skills);skillRows();$('#skillPath').value='';
+  $('#skillStatus').textContent=`Đã thêm ${m} cho Claude Code, Codex và Gemini. Tích OL nếu muốn Ollama dùng.`});
+
+function tick(){
+  if(paused)return;
+  T.forEach(t=>{if(t.st!=='running')return;const v=V[t.v];const di=Math.round(300+rnd()*900),dout=Math.round(40+rnd()*160);
+    t.tin+=di;t.tout+=dout;t.secs+=1.5;v.p1=Math.min(100,v.p1+(di+dout)*v.rate);if(v.p2!=null)v.p2=Math.min(100,v.p2+(di+dout)*v.rate*.3);
+    v.hist[v.hist.length-1]+=Math.round((di+dout)/400);t.left--;
+    if(t.left<=0){t.st='done';t.verified=true;t.report=t.report||REPORTS[t.id]||'Xong. Báo cáo ngắn đã ghi vào report.json.';addLog(t.id,'xong · verified',t.tin+t.tout);
+      if(t.artifact){say(`${t.id} xong. Claude Code đã publish artifact (link mẫu): claude.ai/artifact/…`)}
+      else say(`${t.id} xong (${V[t.v].name}, ${fmtK(t.tin+t.tout)} token).`)}});
+  T.forEach(t=>{if(t.st!=='queued')return;const ok=t.deps.every(d=>byId(d).st==='done');const v=V[t.v];
+    if(ok&&runningOf(t.v)<v.max&&v.p1<80){t.st='running';t.left=t.left||6;addLog(t.id,'bắt đầu',0)}});
+  if(!tick.doneSaid&&byId('T-016').st==='done'){tick.doneSaid=true;say('Tất cả task của yêu cầu đã xong và test xanh. Worktree orch/t-014 chờ bạn merge.')}
+  renderAll();
+}
+function answer(id,text){const t=byId(id);if(!t||!text.trim())return;
+  t.st='queued';t.ans=text.trim();delete t.q;t.left=3;addLog(id,'đã trả lời · xếp hàng lại',0);
+  MSGS.push({me:true,text:`Trả lời ${id}: ${t.ans}`});say(`Đã thêm câu trả lời vào context.md của ${id}; task chạy lại khi Gemini còn lượt.`);
+  if(document.activeElement)document.activeElement.blur();renderAll()}
+function send(text){
+  text=text.trim();if(!text)return;MSGS.push({me:true,text});
+  if(text.startsWith('/stats')){
+    const lines=Object.entries(V).filter(([,v])=>!v.off).map(([k,v])=>`${v.name.padEnd(12)} ${v.w1.padEnd(6)} ${v.local?'   —':String(Math.round(v.p1)).padStart(3)+'%'}   tuần ${v.p2==null?'  —':String(Math.round(v.p2)).padStart(3)+'%'}   chạy ${runningOf(k)}/${v.max}`);
+    say('Usage hiện tại (ước tính):',lines.join('\n'));
+  }else if(text.startsWith('/cancel')){
+    const id=(text.match(/T-\d{3}/)||[])[0];const t=id&&byId(id);
+    if(t&&['running','queued','blocked'].includes(t.st)){t.st='cancelled';delete t.q;addLog(id,'đã hủy',0);say(`Đã hủy ${id}. Worktree giữ nguyên để bạn xem lại.`)}
+    else say(id?`${id} không chạy nên không cần hủy.`:'Ghi rõ task cần hủy, ví dụ /cancel T-014.');
+  }else if(text.startsWith('/artifact')){
+    const id='T-0'+nextId++;T.push({id,title:'Tạo artifact',v:'claude',role:'Artifact (Claude Code publish)',st:'queued',deps:[],tin:0,tout:0,secs:0,left:5,artifact:true});
+    addLog(id,'xếp hàng',0);say(`Giao cho Claude Code ở ${id}. Khi worker publish xong, link artifact sẽ hiện ở đây.`);
+  }else{
+    const a='T-0'+nextId++,b='T-0'+nextId++,c='T-0'+nextId++;
+    T.push({id:a,title:'Khảo sát code',v:'gemini',role:'Khảo sát',st:'queued',deps:[],tin:0,tout:0,secs:0,left:4},
+      {id:b,title:'Viết code',v:'codex',role:'Implement',st:'queued',deps:[a],tin:0,tout:0,secs:0,left:6,wt:'orch/'+b.toLowerCase()},
+      {id:c,title:'Review chéo',v:'claude',role:'Review (khác hãng)',st:'queued',deps:[b],tin:0,tout:0,secs:0,left:4});
+    [a,b,c].forEach(id=>addLog(id,'xếp hàng',0));
+    say(`Đã lập kế hoạch (mẫu): ${a} Gemini khảo sát, ${b} Codex viết code, ${c} Claude review chéo.`);
+  }
+  chat();renderAll();
+}
+function setSection(s){section=s;$('#book').dataset.section=s;
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.sec===s));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+s));
+  $('#secName').textContent=SECS[s];$('#pageNo').textContent=PAGES[s];$('#folio').textContent='orch · '+PAGES[s];
+  if(s==='usage')usage();if(s==='log')log();
+  if(location.hash.slice(1)!==s&&!location.hash.startsWith('#task-'))history.replaceState(null,'','#'+s);
+}
+const prefs=Object.assign({mode:'system',density:'comfy',paper:'lines'},store.get('orch-prefs')||{});
+function applyPrefs(){const r=document.documentElement;
+  if(prefs.mode==='system')r.removeAttribute('data-theme');else r.dataset.theme=prefs.mode;
+  r.classList.toggle('compact',prefs.density==='compact');r.classList.toggle('pg-dots',prefs.paper==='dots');r.classList.toggle('pg-plain',prefs.paper==='plain');store.set('orch-prefs',prefs)}
+$('#m-'+prefs.mode).checked=true;$('#d-'+prefs.density).checked=true;$('#pg-'+prefs.paper).checked=true;
+$('#prefs').addEventListener('change',e=>{prefs[e.target.name]=e.target.value;applyPrefs()});
+applyPrefs();
+
+const ICON_PAUSE='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 3v10M11 3v10"/></svg>',ICON_PLAY='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 3l9 5-9 5z"/></svg>';
+$('#pause').innerHTML=ICON_PAUSE;
+$('#pause').onclick=()=>{paused=!paused;$('#pause').innerHTML=paused?ICON_PLAY:ICON_PAUSE;$('#pause').setAttribute('aria-label',paused?'Tiếp tục mô phỏng':'Tạm dừng mô phỏng');$('#pause').title=$('#pause').getAttribute('aria-label')};
+document.querySelector('.rail').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)setSection(b.dataset.sec)});
+document.querySelector('.rail').addEventListener('keydown',e=>{const tabs=[...document.querySelectorAll('.tab')];const i=tabs.indexOf(document.activeElement);if(i<0)return;
+  if(['ArrowDown','ArrowRight','ArrowUp','ArrowLeft'].includes(e.key)){e.preventDefault();const n=tabs[(i+(e.key==='ArrowDown'||e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];n.focus();setSection(n.dataset.sec)}});
+const openTask=id=>{sel=id;graph();detail()};
+$('#canvas').addEventListener('click',e=>{const g=e.target.closest('.node');if(g)openTask(g.dataset.id)});
+$('#canvas').addEventListener('keydown',e=>{const g=e.target.closest('.node');if(g&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openTask(g.dataset.id);$('#closeD')&&$('#closeD').focus()}});
+$('#detail').addEventListener('click',e=>{
+  if(e.target.closest('#closeD')){sel=null;graph();detail();return}
+  const a=e.target.closest('[data-act]');if(!a)return;const t=byId(sel);
+  if(a.dataset.act==='cancel'){t.st='cancelled';delete t.q;addLog(t.id,'đã hủy',0);say(`Đã hủy ${t.id}.`)}
+  if(a.dataset.act==='rerun'){const nv=$('#altV').value;t.v=nv;t.st='queued';t.err=null;t.left=5;t.report=null;t.verified=false;addLog(t.id,'xếp hàng lại · '+V[nv].name,0);say(`${t.id} xếp hàng lại, chạy bằng ${V[nv].name}.`)}
+  renderAll();
+});
+$('#vendors').addEventListener('click',e=>{const q=e.target.closest('.q[data-v]');if(!q)return;vfilter=vfilter===q.dataset.v?null:q.dataset.v;vendors();graph()});
+document.addEventListener('click',e=>{const c=e.target.closest('[data-open]');if(c)openTask(c.dataset.open)});
+$('#qnotes').addEventListener('submit',e=>{const f=e.target.closest('[data-answer]');if(!f)return;e.preventDefault();answer(f.dataset.answer,f.querySelector('input').value)});
+$('#cmds').addEventListener('click',e=>{const b=e.target.closest('[data-cmd]');if(b){$('#input').value=b.dataset.cmd;$('#input').focus()}});
+$('#compose').addEventListener('submit',e=>{e.preventDefault();send($('#input').value);$('#input').value=''});
+$('#input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#compose').requestSubmit()}});
+$('#logFilter').addEventListener('change',log);
+function route(){const h=location.hash.slice(1);
+  if(SECS[h]){setSection(h);return}
+  const m=h.match(/^task-(t-\d{3})$/);if(m&&byId(m[1].toUpperCase())){section!=='workspace'&&setSection('workspace');openTask(m[1].toUpperCase())}}
+window.addEventListener('hashchange',route);
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(graph,120)});
+
+chat();renderAll();route();
+document.fonts&&document.fonts.ready.then(()=>{chat();graph()});
+setInterval(tick,1500);
+})();
+</script>
