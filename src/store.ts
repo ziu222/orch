@@ -38,11 +38,17 @@ export function nextTaskId(root: string): string {
 }
 
 export function readReport(root: string, id: string): Report | null {
+  let r: unknown;
   try {
-    return JSON.parse(readFileSync(join(taskDir(root, id), 'report.json'), 'utf8'));
+    r = JSON.parse(readFileSync(join(taskDir(root, id), 'report.json'), 'utf8'));
   } catch {
     return null;
   }
+  // trust boundary: a worker's file only counts if it has the Report shape
+  const o = r as Partial<Report> | null;
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+  if (typeof o.summary !== 'string' || typeof o.verified !== 'boolean' || !Array.isArray(o.files)) return null;
+  return o as Report;
 }
 
 export function appendContext(root: string, id: string, text: string): void {

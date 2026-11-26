@@ -66,3 +66,13 @@ test('questions round-trip', () => {
   answerQuestion(root, 'T-001', 'nodemailer');
   assert.deepEqual(readQuestions(root, 'T-001'), [{ q: 'Which mailer?', a: 'nodemailer' }]);
 });
+
+test('readReport rejects JSON that is not a Report', () => {
+  const root = tmpRoot();
+  createTask(root, scout('T-001'), 'x');
+  const put = (v: string) => writeFileSync(join(taskDir(root, 'T-001'), 'report.json'), v);
+  for (const bad of ['{"summary":"done","files":[],"verified":"false"}', '{}', '[]', 'null', '{"summary":"s","verified":true}']) {
+    put(bad);
+    assert.equal(readReport(root, 'T-001'), null, bad);
+  }
+});

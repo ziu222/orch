@@ -43,3 +43,20 @@ test('invalid config.json fails loudly with the path', () => {
   writeFileSync(join(root, '.orch', 'config.json'), '{bad');
   assert.throws(() => loadConfig(root), /config\.json/);
 });
+
+test('config rejects null, unknown names, typos and bad vendors with the path', () => {
+  const bad = [
+    'null',
+    '{"vendors":{"claude":{"maxparallel":5}}}',
+    '{"vendors":{"grok":{"maxParallel":1}}}',
+    '{"roles":{"review":{"vendor":"claud"}}}',
+    '{"roles":{"scout":{"vendor":"gemini","fallback":"x"}}}',
+    '{"vendors":{"codex":{"maxParallel":0}}}',
+  ];
+  for (const b of bad) {
+    const root = tmpRoot();
+    mkdirSync(join(root, '.orch'));
+    writeFileSync(join(root, '.orch', 'config.json'), b);
+    assert.throws(() => loadConfig(root), /config\.json/, b);
+  }
+});
