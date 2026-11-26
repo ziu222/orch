@@ -1,0 +1,10 @@
+{
+  "name": "orch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local multi-agent orchestrator driving official vendor CLIs",
+  "bin": { "orch": "src/cli.ts" },
+  "scripts": { "test": "node --test \"test/**/*.test.ts\"" },
+  "engines": { "node": ">=23.6" }
+}
