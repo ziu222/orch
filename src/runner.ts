@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getAdapter as defaultGetAdapter } from './adapters/index.ts';
 import { appendRun, readReport, taskDir } from './store.ts';
@@ -15,6 +15,8 @@ export type RunOutcome = {
 const TEMPLATE = join(import.meta.dirname, '..', 'templates', 'worker-prompt.md');
 const WIN = process.platform === 'win32';
 const empty: AdapterResult = { text: '', tokensIn: 0, tokensOut: 0, rateLimited: false };
+// http models cannot run anything, so "verified" means grounded in the given context only
+const HTTP_SUFFIX = '\n\nYou cannot run commands or open files; everything you need is above. Set "verified" to true only if every statement in your summary comes from the text above. Reply with the report.json object only, as JSON.';
 
 function buildPrompt(root: string, task: Task): string {
   const dir = taskDir(root, task.id);
@@ -34,30 +36,39 @@ function killTree(pid: number | undefined): void {
   else { try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ } }
 }
 
-interface SpawnResult { stdout: string; stderr: string; code: number | null; missing: boolean; cancelled?: 'abort' | 'timeout' }
+interface SpawnResult { stdout: string; stderr: string; code: number | null; missing: boolean; spawnError?: string; cancelled?: 'abort' | 'timeout' }
 
 function runSpawn(cmd: string, cwd: string, signal: AbortSignal, timeoutMs: number): Promise<SpawnResult> {
   return new Promise(resolve => {
     // a single command string through the shell: .cmd shims work on Windows and no DEP0190 warning
     const child = spawn(cmd, { cwd, shell: true, stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN, windowsHide: true });
-    let stdout = '', stderr = '', cancelled: SpawnResult['cancelled'];
+    let stdout = '', stderr = '', cancelled: SpawnResult['cancelled'], settled = false;
+    // decode as a stream so multi-byte characters split across chunks stay intact
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     child.stdout.on('data', d => (stdout += d));
     child.stderr.on('data', d => (stderr += d));
-    const stop = (why: 'abort' | 'timeout') => { if (!cancelled) { cancelled = why; killTree(child.pid); } };
+    // a background process the worker left behind can hold our pipes open forever:
+    // after exit (or a kill), give the pipes 2s to drain, then stop listening
+    let drain: NodeJS.Timeout | undefined;
+    const release = (code: number | null) => {
+      drain ??= setTimeout(() => { child.stdout.destroy(); child.stderr.destroy(); done(code); }, 2000);
+    };
+    const stop = (why: 'abort' | 'timeout') => { if (!cancelled) { cancelled = why; killTree(child.pid); release(null); } };
     const onAbort = () => stop('abort');
     if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
     const timer = setTimeout(() => stop('timeout'), timeoutMs);
-    const done = (code: number | null, missing = false) => {
-      clearTimeout(timer);
+    const done = (code: number | null, spawnError?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer); clearTimeout(drain);
       signal.removeEventListener('abort', onAbort);
-      resolve({ stdout, stderr, code, missing, cancelled });
+      // cmd.exe prints "is not recognized" (exit 1); sh prints "<bin>: not found" / exits 127
+      const missing = !spawnError && !stdout.trim() && (code === 127 || code === 9009 || /is not recognized as an internal or external command|^(\S+: )*\S+: (command )?not found$/m.test(stderr));
+      resolve({ stdout, stderr, code, missing, cancelled, ...(spawnError ? { spawnError } : {}) });
     };
-    child.on('error', () => done(null, true));
-    child.on('close', code => {
-      // cmd.exe: "is not recognized" (exit 1 or 9009); sh: exit 127
-      const missing = code === 127 || code === 9009 || /is not recognized as an internal or external command|command not found|not found$/im.test(stderr);
-      done(code, missing && !stdout.trim());
-    });
+    child.on('error', e => done(null, e.message));
+    child.on('exit', code => release(code));
+    child.on('close', code => done(code));
   });
 }
 
@@ -107,18 +118,26 @@ export async function runTask(
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     const onAbort = () => ac.abort();
-    signal.addEventListener('abort', onAbort, { once: true });
-    result = await adapter.call(`${prompt}\n\nReply with the report.json object only, as JSON.`, model ?? '', ac.signal);
-    clearTimeout(timer);
-    signal.removeEventListener('abort', onAbort);
+    if (signal.aborted) ac.abort(); else signal.addEventListener('abort', onAbort, { once: true });
+    try {
+      result = ac.signal.aborted ? { ...empty, error: 'cancelled before start' } : await adapter.call(`${prompt}${HTTP_SUFFIX}`, model ?? '', ac.signal);
+    } catch (e) {
+      result = { ...empty, error: (e as Error).message };
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+    }
     writeFileSync(join(dir, 'output.log'), result.text + (result.error ? `\n[error] ${result.error}\n` : ''));
     if (ac.signal.aborted) return finish({ status: 'cancelled', report: null, result, reason: signal.aborted ? 'cancelled' : 'timed out' });
     const rep = extractReport(result.text);
     if (rep) writeFileSync(join(dir, 'report.json'), JSON.stringify(rep, null, 2));
   } else {
-    const r = await runSpawn(command(adapter, task.vendor, promptFile, model), cwd ?? root, signal, timeoutMs);
+    const workDir = cwd ?? root;
+    if (!existsSync(workDir)) return finish({ status: 'failed', report: null, result: empty, reason: `working directory missing: ${workDir}` });
+    const r = await runSpawn(command(adapter, task.vendor, promptFile, model), workDir, signal, timeoutMs);
     writeFileSync(join(dir, 'output.log'), `${r.stdout}\n--- stderr ---\n${r.stderr}`);
     if (r.cancelled) return finish({ status: 'cancelled', report: null, result: empty, reason: r.cancelled === 'abort' ? 'cancelled' : `timed out after ${cfg.taskTimeoutSec}s` });
+    if (r.spawnError) return finish({ status: 'failed', report: null, result: empty, reason: `could not start ${adapter.bin}: ${r.spawnError}` });
     if (r.missing) return finish({ status: 'failed', report: null, result: empty, reason: `${adapter.bin} not found or not logged in` });
     result = adapter.parse(r.stdout, r.stderr, r.code ?? -1);
   }

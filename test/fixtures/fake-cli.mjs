@@ -26,5 +26,13 @@ switch (mode) {
     writeFileSync(join(dir, 'pid.txt'), String(process.pid));
     setInterval(() => {}, 1000);
     break;
+  case 'orphan': {
+    // leaves a background process holding our stdout, like a worker that starts a dev server
+    const { spawn } = await import('node:child_process');
+    const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'inherit', detached: true });
+    writeFileSync(join(dir, 'orphan.txt'), String(g.pid));
+    report({ ...base, verified: true }); result(); g.unref(); process.exit(0);
+  }
+  case 'unicode': report({ ...base, verified: true }); result({ result: 'ệ'.repeat(40000) }); break;
   default: process.stderr.write(`fake-cli: unknown mode ${mode}`); process.exitCode = 2;
 }

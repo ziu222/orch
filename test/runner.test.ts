@@ -126,3 +126,44 @@ test('a code-writing task is never run on an http adapter', async () => {
   assert.equal(o.status, 'failed');
   assert.match(o.reason!, /cannot write code/);
 });
+
+test('a background process left by the worker does not hang the run', async () => {
+  useFake('orphan');
+  const { root, task, cfg } = setup();
+  const t0 = Date.now();
+  const o = await runTask(root, task, cfg, sig(25000));
+  try { process.kill(Number(readFileSync(join(taskDir(root, 'T-001'), 'orphan.txt'), 'utf8'))); } catch { /* gone */ }
+  assert.equal(o.status, 'done', o.reason);
+  assert.ok(Date.now() - t0 < 10000, `took ${Date.now() - t0}ms`);
+});
+
+test('http branch honours a signal that is already aborted', async () => {
+  const { root, task, cfg } = setup({ vendor: 'ollama', role: 'summarize' });
+  const ac = new AbortController(); ac.abort();
+  const reply = '{"summary":"s","files":[],"verified":true,"confidence":"med"}';
+  const o = await runTask(root, task, cfg, ac.signal, undefined, { getAdapter: () => fakeHttp(reply) });
+  assert.equal(o.status, 'cancelled');
+});
+
+test('a missing working directory is reported as such, not as a missing CLI', async () => {
+  useFake('ok');
+  const { root, task, cfg } = setup();
+  const o = await runTask(root, task, cfg, sig(), join(root, 'no-such-worktree'));
+  assert.equal(o.status, 'failed');
+  assert.match(o.reason!, /working directory/);
+});
+
+test('http prompt tells the model it cannot run commands and what verified means there', async () => {
+  const { root, task, cfg } = setup({ vendor: 'ollama', role: 'summarize' });
+  let sent = '';
+  const spy: HttpAdapter = { kind: 'http', call: async (p) => { sent = p; return { text: '', tokensIn: 0, tokensOut: 0, rateLimited: false }; } };
+  await runTask(root, task, cfg, sig(), undefined, { getAdapter: () => spy });
+  assert.match(sent, /cannot run commands/);
+});
+
+test('multi-byte text split across chunks survives intact', async () => {
+  useFake('unicode');
+  const { root, task, cfg } = setup();
+  const o = await runTask(root, task, cfg, sig());
+  assert.equal(o.result.text, 'ệ'.repeat(40000));
+});
