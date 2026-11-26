@@ -9,11 +9,11 @@ test('defaults follow the spec', () => {
   const c = defaultConfig();
   assert.deepEqual(
     Object.fromEntries(Object.entries(c.vendors).map(([k, v]) => [k, v.maxParallel])),
-    { claude: 2, codex: 2, gemini: 2, ollama: 1 },
+    { claude: 2, codex: 2, agy: 2, copilot: 2, ollama: 1 },
   );
   assert.equal(c.vendors.ollama.model, 'qwen3-coder:30b');
-  assert.deepEqual(c.roles.scout, { vendor: 'gemini', fallback: 'codex' });
-  assert.deepEqual(c.roles.summarize, { vendor: 'ollama', fallback: 'gemini' });
+  assert.deepEqual(c.roles.scout, { vendor: 'agy', fallback: 'codex' });
+  assert.deepEqual(c.roles.summarize, { vendor: 'ollama', fallback: 'agy' });
   assert.equal(c.maxReviewRounds, 2);
   assert.equal(c.taskTimeoutSec, 1800);
 });
@@ -32,9 +32,9 @@ test('missing file gives defaults; save then load round-trips', () => {
   const root = tmpRoot();
   assert.deepEqual(loadConfig(root), defaultConfig());
   const c = defaultConfig();
-  c.vendors.gemini.pausedUntil = '2026-11-26T20:00:00.000Z';
+  c.vendors.agy.pausedUntil = '2026-11-26T20:00:00.000Z';
   saveConfig(root, c);
-  assert.equal(loadConfig(root).vendors.gemini.pausedUntil, '2026-11-26T20:00:00.000Z');
+  assert.equal(loadConfig(root).vendors.agy.pausedUntil, '2026-11-26T20:00:00.000Z');
 });
 
 test('invalid config.json fails loudly with the path', () => {
@@ -50,7 +50,7 @@ test('config rejects null, unknown names, typos and bad vendors with the path', 
     '{"vendors":{"claude":{"maxparallel":5}}}',
     '{"vendors":{"grok":{"maxParallel":1}}}',
     '{"roles":{"review":{"vendor":"claud"}}}',
-    '{"roles":{"scout":{"vendor":"gemini","fallback":"x"}}}',
+    '{"roles":{"scout":{"vendor":"agy","fallback":"x"}}}',
     '{"vendors":{"codex":{"maxParallel":0}}}',
   ];
   for (const b of bad) {

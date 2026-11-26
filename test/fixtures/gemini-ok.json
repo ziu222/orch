@@ -1,1 +1,0 @@
-{"response":"ok","stats":{"models":{"gemini-2.5-pro":{"api":{"totalRequests":1,"totalErrors":0},"tokens":{"prompt":8231,"candidates":2,"total":8290,"cached":0,"thoughts":57,"tool":0}}},"tools":{"totalCalls":0}}}
