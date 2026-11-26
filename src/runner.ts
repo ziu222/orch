@@ -22,7 +22,11 @@ function buildPrompt(root: string, task: Task): string {
   const dir = taskDir(root, task.id);
   const head = readFileSync(TEMPLATE, 'utf8').replaceAll('{{taskDir}}', dir).replaceAll('{{id}}', task.id);
   const read = (f: string) => { try { return readFileSync(join(dir, f), 'utf8'); } catch { return ''; } };
-  return `${head}\n\n## task.md\n\n${read('task.md')}\n\n## context.md\n\n${read('context.md')}\n`;
+  // a worktree only holds committed files, so the shared rules travel inside the prompt
+  let rules = '';
+  try { rules = readFileSync(join(root, 'AGENTS.md'), 'utf8'); } catch { /* the repo has no AGENTS.md */ }
+  const tail = rules ? `\n## Shared rules (AGENTS.md)\n\n${rules}\n` : '';
+  return `${head}\n\n## task.md\n\n${read('task.md')}\n\n## context.md\n\n${read('context.md')}\n${tail}`;
 }
 
 // one argument for cmd.exe / sh; our args never carry user text, but paths may hold spaces

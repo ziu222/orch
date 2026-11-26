@@ -79,3 +79,9 @@ test('orch stats sums tokens per vendor, marks estimated and shows pausedUntil',
   assert.match(r.stdout, /copilot.*\(estimated\)/);
   assert.match(r.stdout, /claude.*in=1200.*out=300.*paused until 2099-01-01T00:00:00\.000Z/);
 });
+
+test('worker prompt says how to verify when the project has no tests', () => {
+  const t = readFileSync(join(import.meta.dirname, '..', 'templates', 'worker-prompt.md'), 'utf8');
+  assert.match(t, /project has none/);
+  assert.doesNotMatch(t, /Follow AGENTS\.md at the repository root/);
+});
