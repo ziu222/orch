@@ -35,13 +35,16 @@ export async function runEngine(
 
   let cfg: Config = loadConfig(root);
   const running = new Map<string, Promise<void>>();
-  const live = (v: Vendor) => [...running.keys()].filter(id => readTask(root, id).vendor === v).length;
+  const runningVendor = new Map<string, Vendor>();
+  const live = (v: Vendor) => [...runningVendor.values()].filter(x => x === v).length;
   const paused = (v: Vendor) => { const u = cfg.vendors[v]?.pausedUntil; return !!u && Date.parse(u) > now().getTime(); };
 
   // the vendor a task should run on right now, or null if it has to wait
   const pickVendor = (t: Task): Vendor | null => {
     const role = cfg.roles[t.role];
-    const ok = (v: Vendor | undefined): v is Vendor => !!v && !paused(v) && !(t.writesCode && v === 'ollama');
+    let author: Vendor | undefined;
+    if (t.reviewOf) { try { author = readTask(root, t.reviewOf).vendor; } catch { /* reviewed task gone */ } }
+    const ok = (v: Vendor | undefined): v is Vendor => !!v && !paused(v) && !(t.writesCode && v === 'ollama') && v !== author;
     // own vendor, then the role's main vendor, then its fallback
     return [t.vendor, role?.vendor, role?.fallback].find(ok) ?? null;
   };
@@ -59,7 +62,8 @@ export async function runEngine(
 
   const settle = (t: Task, o: RunOutcome) => {
     if (o.status === 'ratelimited') {
-      const until = o.result.resetAt ?? new Date(now().getTime() + DEFAULT_PAUSE_MS).toISOString();
+      const given = Date.parse(o.result.resetAt ?? '');
+      const until = given > now().getTime() ? o.result.resetAt! : new Date(now().getTime() + DEFAULT_PAUSE_MS).toISOString();
       cfg = loadConfig(root);
       cfg.vendors[t.vendor] = { ...cfg.vendors[t.vendor], pausedUntil: until };
       saveConfig(root, cfg);
@@ -68,7 +72,7 @@ export async function runEngine(
       return;
     }
     const status = o.status === 'done' ? 'done' : o.status; // failed | blocked | cancelled
-    setStatus(root, t.id, status, o.reason ? { reason: o.reason } : {});
+    setStatus(root, t.id, status, { reason: o.reason });
   };
 
   for (;;) {
@@ -94,12 +98,14 @@ export async function runEngine(
         if (!v || live(v) >= cfg.vendors[v].maxParallel) continue;
         handoff(t);
         const started = setStatus(root, t.id, 'running', { vendor: v });
+        runningVendor.set(t.id, v);
         running.set(t.id, (async () => {
           let o: RunOutcome;
           try { o = await run(root, started, cfg, signal, started.worktree); }
-          catch (e) { o = { status: 'failed', report: null, result: { text: '', tokensIn: 0, tokensOut: 0, rateLimited: false }, reason: (e as Error).message }; }
-          settle(started, o);
-        })().finally(() => running.delete(t.id)));
+          catch (e) { o = { status: signal.aborted ? 'cancelled' : 'failed', report: null, result: { text: '', tokensIn: 0, tokensOut: 0, rateLimited: false }, reason: (e as Error).message }; }
+          try { settle(started, o); }
+          catch (e) { try { setStatus(root, t.id, 'failed', { reason: `could not record outcome: ${(e as Error).message}` }); } catch { /* disk unusable */ } }
+        })().finally(() => { running.delete(t.id); runningVendor.delete(t.id); }));
       }
     }
 

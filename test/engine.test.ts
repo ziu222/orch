@@ -129,3 +129,46 @@ test('blocked outcome (worker question) leaves the task blocked', async () => {
   await runEngine(root, { run: fakeRun(() => ({ status: 'blocked', report: { ...ok(), questions: ['Which mailer?'] } })).run });
   assert.equal(readTask(root, 'T-001').status, 'blocked');
 });
+
+test('a reset time in the past still pauses the vendor (no retry burst)', async () => {
+  const root = tmpRoot();
+  add(root, 'T-001', 'claude', [], 'plan'); // plan has no fallback
+  const now = () => new Date('2026-11-26T12:00:00Z');
+  const f = fakeRun(() => ({ status: 'ratelimited', report: null, result: { ...res, rateLimited: true, resetAt: '2026-11-26T10:00:00.000Z' } }), 5);
+  await runEngine(root, { run: f.run, now });
+  assert.equal(f.starts.length, 1);
+  assert.equal(loadConfig(root).vendors.claude.pausedUntil, '2026-11-26T17:00:00.000Z');
+});
+
+test('a reroute never makes a vendor review its own code', async () => {
+  const root = tmpRoot();
+  const cfg = defaultConfig(); cfg.vendors.claude.pausedUntil = '2026-11-26T15:00:00.000Z'; saveConfig(root, cfg);
+  add(root, 'T-001', 'codex', [], 'implement', true);
+  createTask(root, { id: 'T-002', title: 'review', role: 'review', vendor: 'claude', deps: ['T-001'], writesCode: false, reviewOf: 'T-001' }, 'review');
+  const f = fakeRun();
+  await runEngine(root, { run: f.run, now: () => new Date('2026-11-26T12:00:00Z') });
+  assert.deepEqual(f.starts.map(s => s.id), ['T-001']);
+  assert.equal(readTask(root, 'T-002').status, 'queued');
+});
+
+test('an error while recording an outcome fails that task without stranding the others', async () => {
+  const root = tmpRoot();
+  add(root, 'T-001', 'claude'); add(root, 'T-002', 'codex');
+  const poison = new Proxy({}, { get: () => { throw new Error('disk said no'); } }) as RunOutcome;
+  const f = fakeRun(() => ({}), 20);
+  const run = async (r: string, t: Task, ...rest: unknown[]) => (t.id === 'T-001' ? poison : f.run(r, t));
+  await runEngine(root, { run: run as never });
+  assert.equal(readTask(root, 'T-001').status, 'failed');
+  assert.match(readTask(root, 'T-001').reason!, /disk said no/);
+  assert.equal(readTask(root, 'T-002').status, 'done');
+});
+
+test('a finished task does not keep an old reason', async () => {
+  const root = tmpRoot();
+  add(root, 'T-001', 'gemini');
+  const f = fakeRun(t => (t.vendor === 'gemini' ? { status: 'ratelimited', report: null, result: { ...res, rateLimited: true } } : {}), 5);
+  await runEngine(root, { run: f.run });
+  const t = readTask(root, 'T-001');
+  assert.equal(t.status, 'done');
+  assert.equal(t.reason, undefined);
+});
