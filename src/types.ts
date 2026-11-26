@@ -40,6 +40,9 @@ export interface VendorConfig {
   maxParallel: number;
   model?: string;
   pausedUntil?: string;
+  /** optional token budgets; the UI only shows percentages when these are set */
+  budget5h?: number;
+  budgetWeek?: number;
 }
 
 export interface Config {
