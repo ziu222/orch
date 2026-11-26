@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpRoot } from './helpers.ts';
@@ -84,4 +84,19 @@ test('worker prompt says how to verify when the project has no tests', () => {
   const t = readFileSync(join(import.meta.dirname, '..', 'templates', 'worker-prompt.md'), 'utf8');
   assert.match(t, /project has none/);
   assert.doesNotMatch(t, /Follow AGENTS\.md at the repository root/);
+});
+
+test('orch ui starts a loopback server and explains a missing build', async () => {
+  const root = tmpRoot();
+  const child = spawn(process.execPath, [CLI, 'ui', '--port', '0'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    const url = await new Promise<string>((ok, fail) => {
+      let out = '';
+      child.stdout.on('data', d => { out += d; const m = /http:\/\/127\.0\.0\.1:\d+/.exec(out); if (m) ok(m[0]); });
+      child.on('exit', () => fail(new Error('orch ui exited: ' + out)));
+      setTimeout(() => fail(new Error('no url printed: ' + out)), 8000);
+    });
+    const r = await fetch(url + '/');
+    assert.ok(r.status === 503 || r.status === 200);
+  } finally { child.kill(); }
 });

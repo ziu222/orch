@@ -58,9 +58,13 @@ function validate(file: unknown, d: Config, p: string): void {
   for (const [name, v] of Object.entries(f.vendors ?? {})) {
     if (!vendors.includes(name)) fail(`unknown vendor "${name}"`);
     if (!isObj(v)) fail(`vendors.${name} must be an object`);
-    for (const key of Object.keys(v as object)) if (!['maxParallel', 'model', 'pausedUntil'].includes(key)) fail(`unknown key vendors.${name}.${key}`);
+    for (const key of Object.keys(v as object)) if (!['maxParallel', 'model', 'pausedUntil', 'budget5h', 'budgetWeek'].includes(key)) fail(`unknown key vendors.${name}.${key}`);
     const mp = (v as Record<string, unknown>).maxParallel;
     if (mp !== undefined && !(Number.isInteger(mp) && (mp as number) > 0)) fail(`vendors.${name}.maxParallel must be a positive integer`);
+    for (const k of ['budget5h', 'budgetWeek']) {
+      const b = (v as Record<string, unknown>)[k];
+      if (b !== undefined && !(typeof b === 'number' && Number.isFinite(b) && b > 0)) fail(`vendors.${name}.${k} must be a positive number`);
+    }
   }
   for (const [name, r] of Object.entries(f.roles ?? {})) {
     if (!(name in d.roles)) fail(`unknown role "${name}"`);

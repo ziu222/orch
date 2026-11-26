@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getAdapter as defaultGetAdapter } from './adapters/index.ts';
+import { readSkills } from './state.ts';
 import { appendRun, readReport, taskDir } from './store.ts';
 import type { Adapter, AdapterResult, Config, Report, SpawnAdapter, Task, Vendor } from './types.ts';
 
@@ -25,7 +26,11 @@ function buildPrompt(root: string, task: Task): string {
   // a worktree only holds committed files, so the shared rules travel inside the prompt
   let rules = '';
   try { rules = readFileSync(join(root, 'AGENTS.md'), 'utf8'); } catch { /* the repo has no AGENTS.md */ }
-  const tail = rules ? `\n## Shared rules (AGENTS.md)\n\n${rules}\n` : '';
+  // skills switched on for this vendor in the console travel the same way
+  const skills = readSkills(root).filter(s => s.on[task.vendor]).map(s => {
+    try { return `\n## Skill: ${s.name}\n\n${readFileSync(join(root, s.path), 'utf8')}\n`; } catch { return ''; }
+  }).join('');
+  const tail = (rules ? `\n## Shared rules (AGENTS.md)\n\n${rules}\n` : '') + skills;
   return `${head}\n\n## task.md\n\n${read('task.md')}\n\n## context.md\n\n${read('context.md')}\n${tail}`;
 }
 
@@ -34,7 +39,7 @@ const quote = (a: string) =>
   WIN ? (/[\s"&|<>^()%]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a)
       : (/[^\w@%+=:,./-]/.test(a) ? `'${a.replace(/'/g, `'\\''`)}'` : a);
 
-function killTree(pid: number | undefined): void {
+export function killTree(pid: number | undefined): void {
   if (!pid) return;
   if (WIN) spawnSync('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore' });
   else { try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ } }
