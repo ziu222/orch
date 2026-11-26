@@ -151,3 +151,26 @@ test('gemini args: -p with the instruction, json output, optional model', () => 
   assert.ok(a.join(' ').includes('--output-format json'));
   assert.ok(a.join(' ').includes('-m gemini-2.5-pro'));
 });
+
+test('gemini parse survives null model entries', () => {
+  assert.doesNotThrow(() => gemini.parse('{"response":"ok","stats":{"models":{"m":null}}}', '', 0));
+});
+
+test('gemini error object with an empty message is still an error', () => {
+  const r = gemini.parse('{"error":{"message":"","code":500}}', '', 1);
+  assert.ok(r.error);
+  assert.ok(gemini.parse('{"error":{"code":500}}', '', 0).error);
+});
+
+test('codex retry notice before a completed turn is neither an error nor a rate limit', () => {
+  const out = [
+    '{"type":"turn.started"}',
+    '{"type":"error","message":"Reconnecting... 1/5 (429 Too Many Requests)"}',
+    '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}',
+    '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":1}}',
+  ].join('\n');
+  const r = codex.parse(out, '', 0);
+  assert.equal(r.error, undefined);
+  assert.equal(r.rateLimited, false);
+  assert.equal(r.text, 'ok');
+});

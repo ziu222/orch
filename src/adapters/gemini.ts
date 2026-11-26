@@ -26,10 +26,12 @@ export const gemini: SpawnAdapter = {
     }
     let tokensIn = 0, tokensOut = 0;
     for (const m of Object.values(j.stats?.models ?? {})) {
-      tokensIn += m.tokens?.prompt ?? 0;
-      tokensOut += (m.tokens?.candidates ?? 0) + (m.tokens?.thoughts ?? 0);
+      tokensIn += m?.tokens?.prompt ?? 0;
+      tokensOut += (m?.tokens?.candidates ?? 0) + (m?.tokens?.thoughts ?? 0);
     }
-    const err = j.error?.message ?? (code !== 0 ? stderr.trim() || `gemini exited ${code}` : '');
+    // any error object, or a nonzero exit, is a failure even when the message is empty
+    const msg = typeof j.error?.message === 'string' ? j.error.message : '';
+    const err = msg || (j.error || code !== 0 ? stderr.trim() || `gemini failed (exit ${code}, error code ${j.error?.code ?? 'none'})` : '');
     const rateLimited = j.error?.code === 429 || (!!err && isRateLimit(err));
     const resetAt = rateLimited ? retryAfter(err) : undefined;
     return { text: j.response ?? '', tokensIn, tokensOut, rateLimited, ...(resetAt ? { resetAt } : {}), ...(err ? { error: err } : {}) };
