@@ -52,7 +52,7 @@ test('isRateLimit matches the usual limit wordings only', () => {
 });
 
 test('unknown vendor has no adapter yet', () => {
-  assert.throws(() => getAdapter('ollama'), /no adapter/);
+  assert.throws(() => getAdapter('grok' as never), /no adapter/);
 });
 
 test('claude parse never throws and reports an error for JSON that is not a result object', () => {
